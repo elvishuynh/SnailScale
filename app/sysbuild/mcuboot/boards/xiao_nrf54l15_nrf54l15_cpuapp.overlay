@@ -1,3 +1,4 @@
+#include "../../../dts/partitions.dtsi"
 / {
 	chosen {
 		zephyr,code-partition = &boot_partition;

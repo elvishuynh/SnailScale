@@ -1,26 +1,36 @@
-&flash0 {
-    /delete-node/ partitions;
+&cpuapp_rram {
+	/* Delete the default board partitions, prevents label collisions */
+	/delete-node/ partitions;
 
-    partitions {
-        compatible = "fixed-partitions";
-        #address-cells = <1>;
-        #size-cells = <1>;
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
 
-        boot_partition: partition@0 {
-            label = "mcuboot";
-            reg = <0x00000000 0x0000c000>;
-        };
-        slot0_partition: partition@c000 {
-            label = "image-0";
-            reg = <0x0000c000 0x00073000>;
-        };
-        slot1_partition: partition@7f000 {
-            label = "image-1";
-            reg = <0x0007f000 0x00073000>;
-        };
-        storage_partition: partition@f2000 {
-            label = "storage";
-            reg = <0x000f2000 0x0000e000>;
-        };
-    };
+		/* 52 KB locked at address 0x0 */
+		/* fixes 62KB limit */
+		boot_partition: partition@0 {
+			reg = <0x0 0xD000>;
+		};
+
+		/* 840 KB Primary app slot */
+		slot0_partition: partition@d000 {
+			reg = <0xD000 0xD2000>;
+		};
+
+		/* 588 KB Secondary update slot */
+		slot1_partition: partition@df000 {
+			reg = <0xDF000 0x93000>;
+		};
+
+		/* 4 KB Factory data */
+		factory_data: partition@172000 {
+			reg = <0x172000 0x1000>;
+		};
+
+		/* 40 KB Settings storage */
+		storage_partition: partition@173000 {
+			reg = <0x173000 0xA000>;
+		};
+	};
 };

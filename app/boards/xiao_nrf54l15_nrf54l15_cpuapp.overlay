@@ -1,10 +1,15 @@
-/* Ported from Blinky — ADC and PDM cruft from the Matter smart home sample */
+#include "../dts/partitions.dtsi"
+
 / {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+
 	zephyr,user {
-		io-channels = <&adc 0>, <&adc 1>, <&adc 2>, <&adc 3>,
-			<&adc 4>, <&adc 5>, <&adc 6>, <&adc 7>;
+		io-channels = <&adc 0>, <&adc 1>, <&adc 2>, <&adc 3>, <&adc 4>, <&adc 5>, <&adc 6>, <&adc 7>;
 	};
 };
+
 
 dmic_dev: &pdm20 {
 	status = "okay";
