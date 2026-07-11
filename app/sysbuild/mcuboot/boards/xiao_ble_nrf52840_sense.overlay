@@ -1,0 +1,8 @@
+/* Navigate up 3 levels from boards/ -> mcuboot/ -> sysbuild/ to reach app/, then into dts/ */
+#include "../../../dts/partitions.dtsi"
+
+/ {
+    chosen {
+        zephyr,code-partition = &boot_partition;
+    };
+};
