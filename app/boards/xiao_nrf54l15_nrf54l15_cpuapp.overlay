@@ -1,0 +1,27 @@
+/* Ported from Blinky — ADC and PDM cruft from the Matter smart home sample */
+/ {
+	zephyr,user {
+		io-channels = <&adc 0>, <&adc 1>, <&adc 2>, <&adc 3>,
+			<&adc 4>, <&adc 5>, <&adc 6>, <&adc 7>;
+	};
+};
+
+dmic_dev: &pdm20 {
+	status = "okay";
+};
+
+/* Restore full RRAM and SRAM, flatten TrustZone FLRP boundaries */
+&cpuapp_rram {
+	reg = <0x0 DT_SIZE_K(1524)>;
+};
+
+&cpuapp_sram {
+	reg = <0x20000000 DT_SIZE_K(256)>;
+	ranges = <0x0 0x20000000  0x40000>;
+};
+
+/* Override TM1640 shield pins for nRF54L15 where D0/D1 route to gpio1 4/5 */
+&tm1640 {
+	din-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
+	clk-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;
+};
