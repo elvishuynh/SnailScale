@@ -7,30 +7,29 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		/* 52 KB locked at address 0x0 */
-		/* fixes 62KB limit */
 		boot_partition: partition@0 {
-			reg = <0x0 0xD000>;
+			label = "mcuboot";
+			reg = <0x0 0xd000>;
 		};
 
-		/* 840 KB Primary app slot */
 		slot0_partition: partition@d000 {
-			reg = <0xD000 0xD2000>;
+			label = "image-0";
+			reg = <0xd000 0xd2000>;
 		};
 
-		/* 588 KB Secondary update slot */
 		slot1_partition: partition@df000 {
-			reg = <0xDF000 0x93000>;
+			label = "image-1";
+			reg = <0xdf000 0x93000>;
 		};
 
-		/* 4 KB Factory data */
-		factory_data: partition@172000 {
+		factory_data_partition: partition@172000 {
+			label = "factory-data";
 			reg = <0x172000 0x1000>;
 		};
 
-		/* 40 KB Settings storage */
 		storage_partition: partition@173000 {
-			reg = <0x173000 0xA000>;
+			label = "storage";
+			reg = <0x173000 0xa000>;
 		};
 	};
 };
