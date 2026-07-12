@@ -21,4 +21,4 @@ manifest:
       revision: main
 
   self:
-    path: OpenScale
+    path: SnailScale
