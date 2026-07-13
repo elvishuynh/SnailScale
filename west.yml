@@ -20,5 +20,9 @@ manifest:
       remote: elvishuynh
       revision: main
 
+    - name: nau7802_loadcell_zephyr_driver
+      remote: elvishuynh
+      revision: main
+
   self:
     path: SnailScale
