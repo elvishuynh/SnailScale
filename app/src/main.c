@@ -11,36 +11,56 @@
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
-#define SCROLL_DELAY_MS 80
-#define SCROLL_MSG      "Hello World"
+#include <stdio.h>
 
-// total pixel width is strlen times stride so start offscreen right end offscreen left
-#define SCROLL_START    PT18_MATRIX_COLUMNS
-#define SCROLL_END      (-(int)(sizeof(SCROLL_MSG) - 1) * 6)
+static double tare_offset;
+static const struct device *tm_dev;
+
+static int tare_scale(const struct device *nau_dev, const struct device *display_dev)
+{
+	pt18_matrix_print(display_dev, "---", 0);
+
+	double sum = 0;
+	struct sensor_value val;
+
+	for (int i = 0; i < 10; i++) {
+		sensor_sample_fetch(nau_dev);
+		sensor_channel_get(nau_dev, (enum sensor_channel)SENSOR_CHAN_FORCE, &val);
+		sum += sensor_value_to_double(&val);
+		k_msleep(100);
+	}
+
+	tare_offset = sum / 10.0;
+	return 0;
+}
 
 // drdy fires from the global workqueue when nau7802 has a new sample
 static void nau7802_drdy_handler(const struct device *dev,
 				 const struct sensor_trigger *trig)
 {
 	struct sensor_value val;
-
-	if (sensor_sample_fetch(dev)) {
-		LOG_ERR("nau7802 sample fetch failed");
+	if (sensor_sample_fetch(dev) ||
+	    sensor_channel_get(dev, (enum sensor_channel)SENSOR_CHAN_FORCE, &val)) {
 		return;
 	}
 
-	if (sensor_channel_get(dev, (enum sensor_channel)SENSOR_CHAN_FORCE, &val)) {
-		LOG_ERR("nau7802 channel get failed");
-		return;
+	double net_weight = sensor_value_to_double(&val) - tare_offset;
+	char str[16];
+
+	if (net_weight < -9.9) {
+		snprintf(str, sizeof(str), "%.0f", net_weight);
+	} else {
+		snprintf(str, sizeof(str), "%.1f", net_weight);
 	}
 
-	LOG_INF("force: %d.%06d", val.val1, val.val2);
+	pt18_matrix_clear(tm_dev);
+	pt18_matrix_print(tm_dev, str, 0);
 }
 
 int main(void)
 {
 	// tm1640 led matrix setup
-	const struct device *tm_dev = DEVICE_DT_GET(DT_NODELABEL(tm1640));
+	tm_dev = DEVICE_DT_GET(DT_NODELABEL(tm1640));
 
 	if (!device_is_ready(tm_dev)) {
 		LOG_ERR("TM1640 device not ready");
@@ -60,18 +80,11 @@ int main(void)
 		return -1;
 	}
 
-	// wait for the background hw init to finish
-	int rc;
-	while ((rc = sensor_sample_fetch(nau_dev)) == -EBUSY) {
-		LOG_INF("Waiting for NAU7802 hw init to complete");
-		k_msleep(100);
-	}
-	if (rc != 0) {
-		LOG_ERR("NAU7802 first sample fetch failed (err %d)", rc);
-		return -1;
+	while (sensor_sample_fetch(nau_dev) == -EBUSY) {
+		k_msleep(50);
 	}
 
-	LOG_INF("NAU7802 hw init complete");
+	tare_scale(nau_dev, tm_dev);
 
 	// register DRDY trigger now that the sensor is fully online
 	struct sensor_trigger trig = {
@@ -86,13 +99,7 @@ int main(void)
 
 	LOG_INF("NAU7802 DRDY trigger active");
 
-	// led scroll runs on main thread while nau7802 reads happen in background
-	while (1) {
-		for (int off = SCROLL_START; off >= SCROLL_END; off--) {
-			pt18_matrix_print(tm_dev, SCROLL_MSG, off);
-			k_msleep(SCROLL_DELAY_MS);
-		}
-	}
+	k_sleep(K_FOREVER);
 
 	return 0;
 }
