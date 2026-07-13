@@ -9,7 +9,7 @@
 #include <pt18_matrix/pt18_matrix_text.h>
 #include <sensor/nau7802_loadcell/nau7802_loadcell.h>
 
-LOG_MODULE_REGISTER(snailscale, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define SCROLL_DELAY_MS 80
 #define SCROLL_MSG      "Hello World"
@@ -60,16 +60,27 @@ int main(void)
 		return -1;
 	}
 
-	LOG_INF("NAU7802 load cell ready");
+	// wait for the background hw init to finish
+	int rc;
+	while ((rc = sensor_sample_fetch(nau_dev)) == -EBUSY) {
+		LOG_INF("Waiting for NAU7802 hw init to complete");
+		k_msleep(100);
+	}
+	if (rc != 0) {
+		LOG_ERR("NAU7802 first sample fetch failed (err %d)", rc);
+		return -1;
+	}
 
-	// set up data ready trigger so readings fire async on the workqueue
+	LOG_INF("NAU7802 hw init complete");
+
+	// register DRDY trigger now that the sensor is fully online
 	struct sensor_trigger trig = {
 		.type = SENSOR_TRIG_DATA_READY,
 		.chan = (enum sensor_channel)SENSOR_CHAN_FORCE,
 	};
 
 	if (sensor_trigger_set(nau_dev, &trig, nau7802_drdy_handler)) {
-		LOG_ERR("failed to set nau7802 trigger");
+		LOG_ERR("Failed to set NAU7802 trigger");
 		return -1;
 	}
 
