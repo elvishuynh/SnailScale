@@ -44,13 +44,17 @@ static void nau7802_drdy_handler(const struct device *dev,
 		return;
 	}
 
-	double net_weight = sensor_value_to_double(&val) - tare_offset;
+	/* apply a temporary calibration factor so the raw ADC counts 
+	 * fit on our 3 digit and 17 column display */
+	double net_weight = (sensor_value_to_double(&val) - tare_offset) / 10000.0;
 	char str[16];
 
+	// hardware decimal requires exactly four chars padded right
+	// otherwise the hardwired led column logic misses it and throws into the void
 	if (net_weight < -9.9) {
-		snprintf(str, sizeof(str), "%.0f", net_weight);
+		snprintf(str, sizeof(str), "%4.0f", net_weight);
 	} else {
-		snprintf(str, sizeof(str), "%.1f", net_weight);
+		snprintf(str, sizeof(str), "%4.1f", net_weight);
 	}
 
 	pt18_matrix_clear(tm_dev);
