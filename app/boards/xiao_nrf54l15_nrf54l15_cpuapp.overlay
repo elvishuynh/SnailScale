@@ -21,8 +21,29 @@ dmic_dev: &pdm20 {
 };
 
 &cpuapp_sram {
-	reg = <0x20000000 DT_SIZE_K(256)>;
-	ranges = <0x0 0x20000000  0x40000>;
+    reg = <0x20000000 DT_SIZE_K(160)>;
+    ranges = <0x0 0x20000000 0x28000>;
+    #address-cells = <1>;
+    #size-cells = <1>;
+    
+    cpuflpr_sram_code_data: memory@20028000 {
+        compatible = "mmio-sram";
+        reg = <0x20028000 DT_SIZE_K(96)>;
+    };
+};
+
+&cpuapp_rram {
+    #address-cells = <1>;
+    #size-cells = <1>;
+    
+    cpuflpr_code_partition: partition@98000 {
+        reg = <0x98000 0x20000>;
+    };
+};
+
+&cpuflpr_vpr {
+    execution-memory = <&cpuflpr_sram_code_data>;
+    source-memory = <&cpuflpr_code_partition>;
 };
 
 /* TM1640 shield pin overrides for nRF54L15 where D0 D1 route to gpio1 4 5 */

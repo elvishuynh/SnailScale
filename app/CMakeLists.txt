@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.20.0)
 # explicitly link the t2 topology snippet root
 list(APPEND SNIPPET_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
+list(APPEND SNIPPET "nordic-flpr")
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(SnailScale)
 
