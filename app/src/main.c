@@ -6,6 +6,7 @@
 #include <pt18_matrix/pt18_matrix.h>
 #include "scale_logic.h"
 #include "touch_sensor.h"
+#include "bluetooth.h"
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -30,6 +31,11 @@ int main(void)
 	if (!device_is_ready(nau_dev)) {
 		LOG_ERR("NAU7802 device not ready");
 		return -1;
+	}
+
+	if (bluetooth_init()) {
+		LOG_ERR("BLE OTA DFU unavailable");
+		// non fatal scale still functions without ota
 	}
 
 	if (touch_sensor_init(scale_tare) != 0) {
