@@ -74,8 +74,7 @@ dmic_dev: &pdm20 {
 	buttons {
 		compatible = "gpio-keys";
 		touch_pad: touch_pad {
-			/* Routed to D7 to avoid onboard IMU conflict */
-			gpios = <&gpio2 7 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+			gpios = <&gpio1 11 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
 			label = "Touch Pad D7";
 		};
 	};
