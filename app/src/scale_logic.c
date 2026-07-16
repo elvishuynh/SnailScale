@@ -15,7 +15,7 @@ static double tare_offset;
 static const struct device *tm_dev;
 static const struct device *nau_dev_ptr;
 
-static int tare_scale(void)
+void scale_tare(void)
 {
 	pt18_matrix_print(tm_dev, "---", 0);
 
@@ -30,7 +30,6 @@ static int tare_scale(void)
 	}
 
 	tare_offset = sum / 10.0;
-	return 0;
 }
 
 // drdy fires from the global workqueue when nau7802 has a new sample
@@ -69,7 +68,7 @@ int scale_logic_init(const struct device *nau_dev, const struct device *display_
 		k_msleep(50);
 	}
 
-	tare_scale();
+	scale_tare();
 
 	// register DRDY trigger now that the sensor is fully online
 	struct sensor_trigger trig = {

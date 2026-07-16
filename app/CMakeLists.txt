@@ -5,4 +5,5 @@ project(SnailScale)
 target_sources(app PRIVATE 
     src/main.c
     src/scale_logic.c
+    src/touch_sensor.c
 )

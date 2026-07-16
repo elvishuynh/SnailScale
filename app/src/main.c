@@ -5,6 +5,7 @@
 
 #include <pt18_matrix/pt18_matrix.h>
 #include "scale_logic.h"
+#include "touch_sensor.h"
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -31,8 +32,12 @@ int main(void)
 		return -1;
 	}
 
+	if (touch_sensor_init(scale_tare) != 0) {
+		LOG_ERR("Failed to initialize touch sensor");
+	}
+
 	if (scale_logic_init(nau_dev, tm_dev) != 0) {
-		LOG_ERR("Failed to initialize scale logic");
+		LOG_ERR("Failed to initialize scale logic subsystem");
 		return -1;
 	}
 
