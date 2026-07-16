@@ -1,35 +1,35 @@
 &cpuapp_rram {
-	/* Delete the default board partitions, prevents label collisions */
-	/delete-node/ partitions;
+        /* Delete the default board partitions, prevents label collisions */
+        /delete-node/ partitions;
 
-	partitions {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
+        partitions {
+                compatible = "fixed-partitions";
+                #address-cells = <1>;
+                #size-cells = <1>;
 
-		boot_partition: partition@0 {
-			label = "mcuboot";
-			reg = <0x0 0xd000>;
-		};
+                boot_partition: partition@0 {
+                        label = "mcuboot";
+                        reg = <0x0 0xd000>;
+                };
 
-		slot0_partition: partition@d000 {
-			label = "image-0";
-			reg = <0xd000 0xb2800>;
-		};
+                slot0_partition: partition@d000 {
+                        label = "image-0";
+                        reg = <0xd000 0xb3000>;
+                };
 
-		slot1_partition: partition@bf800 {
-			label = "image-1";
-			reg = <0xbf800 0xb2800>;
-		};
+                slot1_partition: partition@c0000 {
+                        label = "image-1";
+                        reg = <0xc0000 0xb2000>;
+                };
 
-		factory_data_partition: partition@172000 {
-			label = "factory-data";
-			reg = <0x172000 0x1000>;
-		};
+                factory_data_partition: partition@172000 {
+                        label = "factory-data";
+                        reg = <0x172000 0x1000>;
+                };
 
-		storage_partition: partition@173000 {
-			label = "storage";
-			reg = <0x173000 0xa000>;
-		};
-	};
+                storage_partition: partition@173000 {
+                        label = "storage";
+                        reg = <0x173000 0xa000>;
+                };
+        };
 };
