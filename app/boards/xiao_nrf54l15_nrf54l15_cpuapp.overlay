@@ -1,92 +1,99 @@
 #include "../dts/partitions.dtsi"
 
 / {
-	chosen {
-		zephyr,code-partition = &slot0_partition;
-	};
+        chosen {
+                zephyr,code-partition = &slot0_partition;
+        };
 
-	zephyr,user {
-		io-channels = <&adc 0>, <&adc 1>, <&adc 2>, <&adc 3>, <&adc 4>, <&adc 5>, <&adc 6>, <&adc 7>;
-	};
+        zephyr,user {
+                io-channels = <&adc 0>, <&adc 1>, <&adc 2>, <&adc 3>, <&adc 4>, <&adc 5>, <&adc 6>, <&adc 7>;
+        };
+
+        soc {
+                /* Define the missing 96KB SRAM region for FLPR */
+                cpuflpr_sram_code_data: memory@20028000 {
+                        compatible = "mmio-sram";
+                        reg = <0x20028000 DT_SIZE_K(96)>;
+                        #address-cells = <1>;
+                        #size-cells = <1>;
+                        ranges = <0x0 0x20028000 DT_SIZE_K(96)>;
+                };
+        };
 };
-
 
 dmic_dev: &pdm20 {
-	status = "okay";
+        status = "okay";
 };
 
-/* Restore full RRAM and SRAM and flatten TrustZone FLRP boundaries */
+/* Restore RRAM for the main application */
 &cpuapp_rram {
-	reg = <0x0 DT_SIZE_K(1524)>;
+    reg = <0x0 DT_SIZE_K(1524)>;
 };
 
+/* Truncate main app SRAM to 160KB for the FLPR */
 &cpuapp_sram {
     reg = <0x20000000 DT_SIZE_K(160)>;
     ranges = <0x0 0x20000000 0x28000>;
     #address-cells = <1>;
     #size-cells = <1>;
-    
-    cpuflpr_sram_code_data: memory@20028000 {
-        compatible = "mmio-sram";
-        reg = <0x20028000 DT_SIZE_K(96)>;
-    };
 };
 
+/* Assign newly defined memory block to FLPR */
 &cpuflpr_vpr {
     execution-memory = <&cpuflpr_sram_code_data>;
 };
 
 /* TM1640 shield pin overrides for nRF54L15 where D0 D1 route to gpio1 4 5 */
 &tm1640 {
-	din-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
-	clk-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;
+        din-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
+        clk-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;
 };
 
 /* I2C pinctrl for NAU7802 on XIAO D2 D3 */
 &pinctrl {
-	i2c22_default: i2c22_default {
-		group1 {
-			psels = <NRF_PSEL(TWIM_SCL, 1, 6)>,
-				<NRF_PSEL(TWIM_SDA, 1, 7)>;
-		};
-	};
+        i2c22_default: i2c22_default {
+                group1 {
+                        psels = <NRF_PSEL(TWIM_SCL, 1, 6)>,
+                                <NRF_PSEL(TWIM_SDA, 1, 7)>;
+                };
+        };
 
-	i2c22_sleep: i2c22_sleep {
-		group1 {
-			psels = <NRF_PSEL(TWIM_SCL, 1, 6)>,
-				<NRF_PSEL(TWIM_SDA, 1, 7)>;
-			low-power-enable;
-		};
-	};
+        i2c22_sleep: i2c22_sleep {
+                group1 {
+                        psels = <NRF_PSEL(TWIM_SCL, 1, 6)>,
+                                <NRF_PSEL(TWIM_SDA, 1, 7)>;
+                        low-power-enable;
+                };
+        };
 };
 
 &i2c22 {
-	compatible = "nordic,nrf-twim";
-	status = "okay";
-	pinctrl-0 = <&i2c22_default>;
-	pinctrl-1 = <&i2c22_sleep>;
-	pinctrl-names = "default", "sleep";
-	clock-frequency = <I2C_BITRATE_STANDARD>;
+        compatible = "nordic,nrf-twim";
+        status = "okay";
+        pinctrl-0 = <&i2c22_default>;
+        pinctrl-1 = <&i2c22_sleep>;
+        pinctrl-names = "default", "sleep";
+        clock-frequency = <I2C_BITRATE_STANDARD>;
 
-	nau7802: nau7802@2a {
-		compatible = "nuvoton,nau7802_loadcell";
-		reg = <0x2a>;
-		drdy-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
-		conversions-per-second = <10>;
-		gain = <128>;
-	};
+        nau7802: nau7802@2a {
+                compatible = "nuvoton,nau7802_loadcell";
+                reg = <0x2a>;
+                drdy-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
+                conversions-per-second = <10>;
+                gain = <128>;
+        };
 };
 
 / {
-	aliases {
-		sw0 = &touch_pad;
-	};
+        aliases {
+                sw0 = &touch_pad;
+        };
 
-	buttons {
-		compatible = "gpio-keys";
-		touch_pad: touch_pad {
-			gpios = <&gpio1 11 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
-			label = "Touch Pad D7";
-		};
-	};
+        buttons {
+                compatible = "gpio-keys";
+                touch_pad: touch_pad {
+                        gpios = <&gpio1 11 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+                        label = "Touch Pad D7";
+                };
+        };
 };
