@@ -1,3 +1,0 @@
-name: mcuboot
-append:
-  EXTRA_CONF_FILE: "boards/xiao_ble_nrf52840_sense.conf"
