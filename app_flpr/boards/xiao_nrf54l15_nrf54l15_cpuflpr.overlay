@@ -1,8 +1,6 @@
-#include "../../app/dts/partitions.dtsi"
-
-/ {
-    chosen {
-        zephyr,flash = &cpuflpr_code_partition;
-        zephyr,sram = &cpuflpr_sram_code_data;
+&cpuflpr_rram {
+    ranges;
+    partitions {
+        ranges;
     };
 };
