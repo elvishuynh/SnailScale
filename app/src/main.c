@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <hal/nrf_vpr.h>
+#include <hal/nrf_spu.h>
 #include <ram_pwrdn.h>
 #include "flpr_firmware.h"
 
@@ -24,6 +25,9 @@ static void flpr_start(void) {
     // Copy the embedded FLPR firmware array into the allocated SRAM space
     memcpy((void *)FLPR_SRAM_GLOBAL_ADDR, flpr_firmware, FLPR_FIRMWARE_SIZE);
     
+    // Grant the VPR core secure access
+    nrf_spu_periph_perm_secattr_set(NRF_SPU00, nrf_address_slave_get((uint32_t)NRF_VPR00), true);
+
     // Set Program Counter for the VPR core to the SRAM address
     nrf_vpr_initpc_set(NRF_VPR00, FLPR_SRAM_GLOBAL_ADDR);
     

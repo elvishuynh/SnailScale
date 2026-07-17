@@ -41,6 +41,7 @@ dmic_dev: &pdm20 {
 /* Assign newly defined memory block to FLPR */
 &cpuflpr_vpr {
     execution-memory = <&cpuflpr_sram_code_data>;
+    status = "okay";
 };
 
 /* TM1640 shield pin overrides for nRF54L15 where D0 D1 route to gpio1 4 5 */
