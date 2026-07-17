@@ -9,4 +9,3 @@ ExternalZephyrProject_Add(
 
 # compile app_flpr before main app
 add_dependencies(app app_flpr)
-sysbuild_add_dependencies(FLASH app app_flpr)
