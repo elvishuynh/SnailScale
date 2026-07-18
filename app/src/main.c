@@ -32,23 +32,36 @@ SYS_INIT(debug_boot_47, POST_KERNEL, 47);
 
 #define FLPR_SRAM_GLOBAL_ADDR (DT_REG_ADDR(DT_NODELABEL(cpuflpr_sram_code_data)))
 
-static int flpr_sys_init(void) {
-    // Copy the embedded FLPR firmware array into the allocated SRAM space
-    memcpy((void *)FLPR_SRAM_GLOBAL_ADDR, flpr_firmware, FLPR_FIRMWARE_SIZE);
+// power up, scrub, runs at priority 0
+// prepares the silicon before the main core IPC driver wakes up at priority 50
+static int flpr_early_ram_init(void) {
+    // power up and scrub sram_tx
+    power_up_ram(0x20018000, 0x20018800);
+    memset((void *)0x20018000, 0, 0x0800);
     
-    // Grant the VPR core secure access
-    nrf_spu_periph_perm_secattr_set(NRF_SPU00, nrf_address_slave_get((uint32_t)NRF_VPR00), true);
-
-    // Set Program Counter for the VPR core to the SRAM address
-    nrf_vpr_initpc_set(NRF_VPR00, FLPR_SRAM_GLOBAL_ADDR);
+    // power up and scrub sram_rx
+    power_up_ram(0x20020000, 0x20020800);
+    memset((void *)0x20020000, 0, 0x0800);
     
-    // Start the VPR core
-    nrf_vpr_cpurun_set(NRF_VPR00, true);
-
+    // power up FLPR SRAM
+    power_up_ram(FLPR_SRAM_GLOBAL_ADDR, FLPR_SRAM_GLOBAL_ADDR + FLPR_FIRMWARE_SIZE);
+    
     return 0;
 }
+SYS_INIT(flpr_early_ram_init, PRE_KERNEL_1, 0);
 
-SYS_INIT(flpr_sys_init, PRE_KERNEL_1, 0);
+// boot the coprocessor, priority 48
+// starts FLPR after the main core Log Link is active
+static int flpr_boot(void) {
+    memcpy((void *)FLPR_SRAM_GLOBAL_ADDR, flpr_firmware, FLPR_FIRMWARE_SIZE);
+    
+    nrf_spu_periph_perm_secattr_set(NRF_SPU00, nrf_address_slave_get((uint32_t)NRF_VPR00), true);
+    nrf_vpr_initpc_set(NRF_VPR00, FLPR_SRAM_GLOBAL_ADDR);
+    nrf_vpr_cpurun_set(NRF_VPR00, true);
+    
+    return 0;
+}
+SYS_INIT(flpr_boot, POST_KERNEL, 48);
 
 int main(void)
 {
