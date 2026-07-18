@@ -8,11 +8,43 @@
 
 / {
     chosen {
-        zephyr,log-ipc = &cpuflpr_vevif_tx;
+        zephyr,log-ipc = &ipc0;
+    };
+
+    soc {
+        reserved-memory {
+            #address-cells = <1>;
+            #size-cells = <1>;
+
+            sram_tx: memory@20020000 {
+                reg = <0x20020000 0x0800>;
+            };
+
+            sram_rx: memory@20018000 {
+                reg = <0x20018000 0x0800>;
+            };
+        };
+    };
+
+    ipc {
+        ipc0: ipc0 {
+            compatible = "zephyr,ipc-icmsg";
+            dcache-alignment = <32>;
+            tx-region = <&sram_tx>;
+            rx-region = <&sram_rx>;
+            mboxes = <&cpuflpr_vevif_tx 20>, <&cpuflpr_vevif_rx 21>;
+            mbox-names = "tx", "rx";
+            status = "okay";
+        };
     };
 };
 
 /* properly enable VEVIF for coprocessor transmission */
 &cpuflpr_vevif_tx {
+    status = "okay";
+};
+
+/* enable rx vevif for coprocessor receiving */
+&cpuflpr_vevif_rx {
     status = "okay";
 };
