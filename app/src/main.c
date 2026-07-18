@@ -48,7 +48,7 @@ static int flpr_sys_init(void) {
     return 0;
 }
 
-SYS_INIT(flpr_sys_init, POST_KERNEL, 48);
+SYS_INIT(flpr_sys_init, PRE_KERNEL_1, 0);
 
 int main(void)
 {
