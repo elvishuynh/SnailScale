@@ -14,21 +14,9 @@
 #include "touch_sensor.h"
 #include "bluetooth.h"
 
-#include <zephyr/sys/printk.h>
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
-static int debug_boot_45(void) {
-    printk(">>> BOOT PROGRESS: Reached priority 45 (Before IPC Init)\n");
-    return 0;
-}
-SYS_INIT(debug_boot_45, POST_KERNEL, 45);
-
-static int debug_boot_47(void) {
-    printk(">>> BOOT PROGRESS: Reached priority 47 (After IPC Init)\n");
-    return 0;
-}
-SYS_INIT(debug_boot_47, POST_KERNEL, 47);
 
 #define FLPR_SRAM_GLOBAL_ADDR (DT_REG_ADDR(DT_NODELABEL(cpuflpr_sram_code_data)))
 
@@ -65,8 +53,6 @@ SYS_INIT(flpr_boot, POST_KERNEL, 48);
 
 int main(void)
 {
-	printk(">>> BOOT PROGRESS: Reached main()\n");
-
 	// tm1640 led matrix setup
 	const struct device *tm_dev = DEVICE_DT_GET(DT_NODELABEL(tm1640));
 
