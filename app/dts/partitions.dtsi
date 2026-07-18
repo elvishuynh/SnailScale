@@ -14,12 +14,17 @@
 
                 slot0_partition: partition@d000 {
                         label = "image-0";
-                        reg = <0xd000 0xb3000>;
+                        reg = <0xd000 0xb2000>;
                 };
 
-                slot1_partition: partition@c0000 {
+                slot1_partition: partition@bf000 {
                         label = "image-1";
-                        reg = <0xc0000 0xb2000>;
+                        reg = <0xbf000 0xb2000>;
+                };
+
+                scratch_partition: partition@171000 {
+                        label = "image-scratch";
+                        reg = <0x171000 0x1000>;
                 };
 
                 factory_data_partition: partition@172000 {

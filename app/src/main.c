@@ -14,14 +14,25 @@
 #include "touch_sensor.h"
 #include "bluetooth.h"
 
+#include <zephyr/sys/printk.h>
+
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
+
+static int debug_boot_45(void) {
+    printk(">>> BOOT PROGRESS: Reached priority 45 (Before IPC Init)\n");
+    return 0;
+}
+SYS_INIT(debug_boot_45, POST_KERNEL, 45);
+
+static int debug_boot_47(void) {
+    printk(">>> BOOT PROGRESS: Reached priority 47 (After IPC Init)\n");
+    return 0;
+}
+SYS_INIT(debug_boot_47, POST_KERNEL, 47);
 
 #define FLPR_SRAM_GLOBAL_ADDR (DT_REG_ADDR(DT_NODELABEL(cpuflpr_sram_code_data)))
 
-static void flpr_start(void) {
-    // Power up RAM
-    power_up_ram(FLPR_SRAM_GLOBAL_ADDR, FLPR_SRAM_GLOBAL_ADDR + FLPR_FIRMWARE_SIZE);
-    
+static int flpr_sys_init(void) {
     // Copy the embedded FLPR firmware array into the allocated SRAM space
     memcpy((void *)FLPR_SRAM_GLOBAL_ADDR, flpr_firmware, FLPR_FIRMWARE_SIZE);
     
@@ -33,10 +44,16 @@ static void flpr_start(void) {
     
     // Start the VPR core
     nrf_vpr_cpurun_set(NRF_VPR00, true);
+
+    return 0;
 }
+
+SYS_INIT(flpr_sys_init, POST_KERNEL, 48);
 
 int main(void)
 {
+	printk(">>> BOOT PROGRESS: Reached main()\n");
+
 	// tm1640 led matrix setup
 	const struct device *tm_dev = DEVICE_DT_GET(DT_NODELABEL(tm1640));
 
@@ -71,8 +88,6 @@ int main(void)
 		LOG_ERR("Failed to initialize scale logic subsystem");
 		return -1;
 	}
-
-	flpr_start();
 
 	LOG_INF("NAU7802 DRDY trigger active");
 
