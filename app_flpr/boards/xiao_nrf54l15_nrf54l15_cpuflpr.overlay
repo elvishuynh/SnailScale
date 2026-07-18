@@ -4,3 +4,15 @@
         ranges;
     };
 };
+
+
+/ {
+    chosen {
+        zephyr,log-ipc = &cpuflpr_vevif_tx;
+    };
+};
+
+/* properly enable VEVIF for coprocessor transmission */
+&cpuflpr_vevif_tx {
+    status = "okay";
+};

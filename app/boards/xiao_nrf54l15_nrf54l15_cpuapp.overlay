@@ -3,6 +3,7 @@
 / {
         chosen {
                 zephyr,code-partition = &slot0_partition;
+                zephyr,log-ipc = &cpuapp_vevif_rx;
         };
 
         zephyr,user {
@@ -38,9 +39,18 @@ dmic_dev: &pdm20 {
     #size-cells = <1>;
 };
 
-/* Assign newly defined memory block to FLPR */
 &cpuflpr_vpr {
     execution-memory = <&cpuflpr_sram_code_data>;
+    status = "okay";
+};
+
+/* enable VEVIF for coprocessor */
+&cpuapp_vevif_tx {
+    status = "okay";
+};
+
+/* enable rx vevif mailbox for receiving ipc logs from flpr */
+&cpuapp_vevif_rx {
     status = "okay";
 };
 
