@@ -13,45 +13,85 @@ static const struct i2c_dt_spec imu_i2c = I2C_DT_SPEC_GET(DT_NODELABEL(lsm6ds3tr
 #define FIFO_WATERMARK 30 // 30 words = 10 samples X, Y, Z
 static int16_t fifo_buf[FIFO_WATERMARK];
 
-#define AMPLITUDE_THRESHOLD 5000
-#define ZCR_MIN 3
+#define SHAKE_WINDOW_SAMPLES 20
+#define VARIANCE_THRESHOLD 4000000
+#define ZCR_MIN 4
+#define ZCR_MARGIN 1500
+
+struct vec3 {
+    int16_t x, y, z;
+};
+static struct vec3 history[SHAKE_WINDOW_SAMPLES];
+static size_t history_idx = 0;
+static size_t history_count = 0;
 
 static bool detect_shake_gesture(int16_t *buffer, size_t num_samples) {
-    if (num_samples < 2) return false;
+    bool triggered = false;
 
-    for (int axis = 0; axis < 3; axis++) {
-        int32_t sum = 0;
-        int16_t min_val = 32767;
-        int16_t max_val = -32768;
-
-        for (size_t i = 0; i < num_samples; i++) {
-            int16_t val = buffer[i * 3 + axis];
-            sum += val;
-            if (val < min_val) min_val = val;
-            if (val > max_val) max_val = val;
-        }
-
-        int16_t mean = sum / (int32_t)num_samples;
-        int16_t p2p = max_val - min_val;
-
-        int zcr = 0;
-        bool last_above = (buffer[axis] > mean);
+    for (size_t i = 0; i < num_samples; i++) {
+        history[history_idx].x = buffer[i * 3 + 0];
+        history[history_idx].y = buffer[i * 3 + 1];
+        history[history_idx].z = buffer[i * 3 + 2];
         
-        for (size_t i = 1; i < num_samples; i++) {
-            bool above = (buffer[i * 3 + axis] > mean);
-            if (above != last_above) {
-                zcr++;
-                last_above = above;
-            }
-        }
-
-        if (p2p > AMPLITUDE_THRESHOLD && zcr >= ZCR_MIN) {
-            LOG_INF("Shake detected on axis %d! (p2p: %d, zcr: %d)", axis, p2p, zcr);
-            return true;
+        history_idx = (history_idx + 1) % SHAKE_WINDOW_SAMPLES;
+        if (history_count < SHAKE_WINDOW_SAMPLES) {
+            history_count++;
         }
     }
 
-    return false;
+    if (history_count < SHAKE_WINDOW_SAMPLES) {
+        return false;
+    }
+
+    int64_t sum_x = 0, sum_y = 0, sum_z = 0;
+    for (size_t i = 0; i < SHAKE_WINDOW_SAMPLES; i++) {
+        sum_x += history[i].x;
+        sum_y += history[i].y;
+        sum_z += history[i].z;
+    }
+    int32_t mean_x = (int32_t)(sum_x / SHAKE_WINDOW_SAMPLES);
+    int32_t mean_y = (int32_t)(sum_y / SHAKE_WINDOW_SAMPLES);
+    int32_t mean_z = (int32_t)(sum_z / SHAKE_WINDOW_SAMPLES);
+
+    int64_t var_sum = 0;
+    for (size_t i = 0; i < SHAKE_WINDOW_SAMPLES; i++) {
+        int32_t dx = history[i].x - mean_x;
+        int32_t dy = history[i].y - mean_y;
+        int32_t dz = history[i].z - mean_z;
+        var_sum += (int64_t)(dx * dx) + (int64_t)(dy * dy) + (int64_t)(dz * dz);
+    }
+    int32_t variance = (int32_t)(var_sum / SHAKE_WINDOW_SAMPLES);
+
+    int max_zcr = 0;
+    int32_t means[3] = {mean_x, mean_y, mean_z};
+    
+    for (int axis = 0; axis < 3; axis++) {
+        int zcr = 0;
+        int16_t initial_val = (axis == 0) ? history[history_idx].x : ((axis == 1) ? history[history_idx].y : history[history_idx].z);
+        bool is_high = (initial_val > means[axis]);
+        
+        for (size_t i = 1; i < SHAKE_WINDOW_SAMPLES; i++) {
+            size_t idx = (history_idx + i) % SHAKE_WINDOW_SAMPLES;
+            int16_t val = (axis == 0) ? history[idx].x : ((axis == 1) ? history[idx].y : history[idx].z);
+            
+            if (is_high && val < means[axis] - ZCR_MARGIN) {
+                zcr++;
+                is_high = false;
+            } else if (!is_high && val > means[axis] + ZCR_MARGIN) {
+                zcr++;
+                is_high = true;
+            }
+        }
+        if (zcr > max_zcr) max_zcr = zcr;
+    }
+
+    if (variance > VARIANCE_THRESHOLD && max_zcr >= ZCR_MIN) {
+        LOG_INF("Shake detected! (var: %d, max_zcr: %d)", variance, max_zcr);
+        history_count = 0; // reset to avoid double trigger
+        triggered = true;
+    }
+
+    return triggered;
 }
 
 static K_SEM_DEFINE(shake_sem, 0, 1);
