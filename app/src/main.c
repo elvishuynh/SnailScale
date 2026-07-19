@@ -15,6 +15,7 @@
 #include "touch_sensor.h"
 #include "bluetooth.h"
 #include "heartbeat.h"
+#include "symbols.h"
 
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
@@ -84,6 +85,10 @@ int main(void)
 	if (touch_sensor_init(scale_tare) != 0) {
 		LOG_ERR("Failed to initialize touch sensor");
 	}
+
+	// temporary
+	pt18_matrix_write(tm_dev, sym_movement, sizeof(sym_movement));
+	k_msleep(2000);
 
 	if (scale_logic_init(nau_dev, tm_dev) != 0) {
 		LOG_ERR("Failed to initialize scale logic subsystem");
