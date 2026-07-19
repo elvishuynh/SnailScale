@@ -21,9 +21,8 @@ static int16_t fifo_buf[FIFO_WATERMARK];
 #define ZCR_MARGIN 1500
 
 // variance below this means the scale is not moving
-// well above sensor noise but well below intentional movement
 #define STILLNESS_THRESHOLD 500000
-#define STILLNESS_REQUIRED_READS 3
+#define STILLNESS_REQUIRED_READS 1
 
 struct vec3 {
     int16_t x, y, z;
