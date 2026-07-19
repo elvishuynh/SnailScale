@@ -24,26 +24,29 @@ void scale_tare(void)
 
 	heartbeat_send_stillness_request();
 
-	bool show_a = true;
 	int iterations = 0;
 	
-	// loop up to 30 seconds (60 * 500ms)
-	while (iterations < 60) {
-		if (show_a) {
+	// loop up to 30 seconds (120 * 250ms)
+	while (iterations < 120) {
+		int frame = iterations % 4;
+		if (frame == 0) {
 			pt18_matrix_write(tm_dev, sym_movement_a, sizeof(sym_movement_a));
-		} else {
+		} else if (frame == 1) {
 			pt18_matrix_write(tm_dev, sym_movement_b, sizeof(sym_movement_b));
+		} else if (frame == 2) {
+			pt18_matrix_write(tm_dev, sym_movement_c, sizeof(sym_movement_c));
+		} else {
+			pt18_matrix_write(tm_dev, sym_movement_d, sizeof(sym_movement_d));
 		}
 		
-		if (heartbeat_wait_stillness(500) == 0) {
+		if (heartbeat_wait_stillness(250) == 0) {
 			break;
 		}
 		
-		show_a = !show_a;
 		iterations++;
 	}
 
-	if (iterations >= 60) {
+	if (iterations >= 120) {
 		LOG_WRN("Stillness timeout after 30s, taring anyway");
 	}
 
