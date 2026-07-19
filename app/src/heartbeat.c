@@ -89,7 +89,7 @@ int heartbeat_init(void)
 // blocks the calling thread until FLPR says the scale is still
 // this runs on the sysworkq when called from tare so other
 // work items like DRDY will be delayed until stillness is confirmed
-int heartbeat_request_stillness(void)
+int heartbeat_send_stillness_request(void)
 {
     // drain any stale signals
     k_sem_reset(&stillness_sem);
@@ -100,11 +100,12 @@ int heartbeat_request_stillness(void)
         LOG_ERR("Failed to send STILLNESS_REQUEST: %d", ret);
         return ret;
     }
-
-    ret = k_sem_take(&stillness_sem, K_SECONDS(STILLNESS_TIMEOUT_SEC));
-    if (ret == -EAGAIN) {
-        LOG_WRN("Stillness timeout after %ds, taring anyway", STILLNESS_TIMEOUT_SEC);
-    }
-
     return 0;
+}
+
+// blocks the calling thread until FLPR says the scale is still
+// returns 0 if still, -EAGAIN if timeout
+int heartbeat_wait_stillness(int timeout_ms)
+{
+    return k_sem_take(&stillness_sem, K_MSEC(timeout_ms));
 }

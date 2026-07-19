@@ -20,12 +20,32 @@ static const struct device *nau_dev_ptr;
 
 void scale_tare(void)
 {
-	// show movement symbol while we wait for scale to settle
 	pt18_matrix_clear(tm_dev);
-	pt18_matrix_write(tm_dev, sym_movement, sizeof(sym_movement));
 
-	// blocks until FLPR confirms stillness or timeout
-	heartbeat_request_stillness();
+	heartbeat_send_stillness_request();
+
+	bool show_a = true;
+	int iterations = 0;
+	
+	// loop up to 30 seconds (60 * 500ms)
+	while (iterations < 60) {
+		if (show_a) {
+			pt18_matrix_write(tm_dev, sym_movement_a, sizeof(sym_movement_a));
+		} else {
+			pt18_matrix_write(tm_dev, sym_movement_b, sizeof(sym_movement_b));
+		}
+		
+		if (heartbeat_wait_stillness(500) == 0) {
+			break;
+		}
+		
+		show_a = !show_a;
+		iterations++;
+	}
+
+	if (iterations >= 60) {
+		LOG_WRN("Stillness timeout after 30s, taring anyway");
+	}
 
 	pt18_matrix_print(tm_dev, "---", 0);
 
