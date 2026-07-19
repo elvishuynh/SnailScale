@@ -7,6 +7,8 @@
 LOG_MODULE_REGISTER(flpr_main, LOG_LEVEL_INF);
 
 #define TARE_REQUEST 0x01
+#define STILLNESS_REQUEST 0x02
+#define STILLNESS_CONFIRMED 0x03
 
 static const struct i2c_dt_spec imu_i2c = I2C_DT_SPEC_GET(DT_NODELABEL(lsm6ds3tr_c));
 
@@ -18,12 +20,22 @@ static int16_t fifo_buf[FIFO_WATERMARK];
 #define ZCR_MIN 4
 #define ZCR_MARGIN 1500
 
+// variance below this means the scale is not moving
+// well above sensor noise but well below intentional movement
+#define STILLNESS_THRESHOLD 500000
+#define STILLNESS_REQUIRED_READS 3
+
 struct vec3 {
     int16_t x, y, z;
 };
 static struct vec3 history[SHAKE_WINDOW_SAMPLES];
 static size_t history_idx = 0;
 static size_t history_count = 0;
+
+// stillness detection state
+static volatile bool awaiting_stillness;
+static int still_count;
+static struct ipc_ept ep;
 
 static bool detect_shake_gesture(int16_t *buffer, size_t num_samples) {
     bool triggered = false;
@@ -103,19 +115,60 @@ static void imu_trigger_handler(const struct device *dev, const struct sensor_tr
     
     uint16_t num_words = status1 | ((status2 & 0x07) << 8);
     
-    if (num_words >= FIFO_WATERMARK) {
-        // burst read from FIFO_DATA_OUT_L (0x3E)
-        int ret = i2c_burst_read_dt(&imu_i2c, 0x3E, (uint8_t*)fifo_buf, FIFO_WATERMARK * 2); 
-        if (ret == 0) {
-            // FIFO_WATERMARK is total words, divide by 3 for # of XYZ samples
-            if (detect_shake_gesture(fifo_buf, FIFO_WATERMARK / 3)) {
-                k_sem_give(&shake_sem);
+    if (num_words < FIFO_WATERMARK) {
+        LOG_WRN("Interrupt fired but FIFO only has %u words", num_words);
+        return;
+    }
+
+    // burst read from FIFO_DATA_OUT_L (0x3E)
+    int ret = i2c_burst_read_dt(&imu_i2c, 0x3E, (uint8_t*)fifo_buf, FIFO_WATERMARK * 2);
+    if (ret != 0) {
+        LOG_ERR("FIFO burst read failed: %d", ret);
+        return;
+    }
+
+    size_t num_samples = FIFO_WATERMARK / 3;
+
+    if (awaiting_stillness) {
+        // calculate per batch variance to check if scale is still
+        int64_t sx = 0, sy = 0, sz = 0;
+        for (size_t i = 0; i < num_samples; i++) {
+            sx += fifo_buf[i * 3 + 0];
+            sy += fifo_buf[i * 3 + 1];
+            sz += fifo_buf[i * 3 + 2];
+        }
+        int32_t mx = (int32_t)(sx / num_samples);
+        int32_t my = (int32_t)(sy / num_samples);
+        int32_t mz = (int32_t)(sz / num_samples);
+
+        int64_t var = 0;
+        for (size_t i = 0; i < num_samples; i++) {
+            int32_t dx = fifo_buf[i * 3 + 0] - mx;
+            int32_t dy = fifo_buf[i * 3 + 1] - my;
+            int32_t dz = fifo_buf[i * 3 + 2] - mz;
+            var += (int64_t)(dx * dx) + (int64_t)(dy * dy) + (int64_t)(dz * dz);
+        }
+        var /= num_samples;
+
+        if (var < STILLNESS_THRESHOLD) {
+            still_count++;
+            LOG_INF("Still read %d/%d (var: %lld)", still_count, STILLNESS_REQUIRED_READS, var);
+            if (still_count >= STILLNESS_REQUIRED_READS) {
+                LOG_INF("Stillness confirmed");
+                awaiting_stillness = false;
+                still_count = 0;
+                uint8_t msg = STILLNESS_CONFIRMED;
+                ipc_service_send(&ep, &msg, sizeof(msg));
             }
         } else {
-            LOG_ERR("FIFO burst read failed: %d", ret);
+            // reset if movement detected again
+            still_count = 0;
         }
     } else {
-        LOG_WRN("Interrupt fired but FIFO only has %u words", num_words);
+        // normal shake detection
+        if (detect_shake_gesture(fifo_buf, num_samples)) {
+            k_sem_give(&shake_sem);
+        }
     }
 }
 
@@ -126,7 +179,14 @@ static void ep_bound_cb(void *priv) {
 }
 
 static void ep_recv_cb(const void *data, size_t len, void *priv) {
-    // flpr doesnt expect inbound data yet
+    if (len < 1) return;
+    uint8_t msg = ((const uint8_t *)data)[0];
+
+    if (msg == STILLNESS_REQUEST) {
+        LOG_INF("Stillness check requested by cpuapp");
+        still_count = 0;
+        awaiting_stillness = true;
+    }
 }
 
 static struct ipc_ept_cfg ep_cfg = {
@@ -140,7 +200,6 @@ static struct ipc_ept_cfg ep_cfg = {
 int main(void)
 {
     const struct device *ipc = DEVICE_DT_GET(DT_NODELABEL(ipc0));
-    struct ipc_ept ep;
 
     if (!i2c_is_ready_dt(&imu_i2c)) {
         LOG_ERR("imu I2C bus not ready");

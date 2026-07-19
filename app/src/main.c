@@ -15,7 +15,6 @@
 #include "touch_sensor.h"
 #include "bluetooth.h"
 #include "heartbeat.h"
-#include "symbols.h"
 
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
@@ -86,17 +85,16 @@ int main(void)
 		LOG_ERR("Failed to initialize touch sensor");
 	}
 
-	// temporary
-	pt18_matrix_write(tm_dev, sym_movement, sizeof(sym_movement));
-	k_msleep(2000);
+	// ipc must be up before scale_logic_init because scale_tare
+	// sends a STILLNESS_REQUEST to FLPR and blocks until confirmed
+	// flpr is already booted via SYS_INIT at POST_KERNEL 48
+	if (heartbeat_init() != 0) {
+		LOG_ERR("Failed to initialize heartbeat IPC");
+	}
 
 	if (scale_logic_init(nau_dev, tm_dev) != 0) {
 		LOG_ERR("Failed to initialize scale logic subsystem");
 		return -1;
-	}
-
-	if (heartbeat_init() != 0) {
-		LOG_ERR("Failed to initialize heartbeat IPC");
 	}
 
 	LOG_INF("NAU7802 DRDY trigger active");

@@ -8,6 +8,11 @@
 #include "scale_logic.h"
 
 #define TARE_REQUEST 0x01
+#define STILLNESS_REQUEST 0x02
+#define STILLNESS_CONFIRMED 0x03
+
+// 30s timeout if scale never settles
+#define STILLNESS_TIMEOUT_SEC 30
 
 LOG_MODULE_REGISTER(heartbeat, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -19,6 +24,9 @@ static void tare_work_handler(struct k_work *work) {
 }
 
 static K_SEM_DEFINE(ep_bound, 0, 1);
+static K_SEM_DEFINE(stillness_sem, 0, 1);
+
+static struct ipc_ept ep;
 
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 
@@ -36,6 +44,9 @@ static void ep_recv_cb(const void *data, size_t len, void *priv) {
             gpio_pin_toggle_dt(&led);
         }
         k_work_submit(&tare_work);
+    } else if (msg == STILLNESS_CONFIRMED) {
+        LOG_INF("FLPR confirmed stillness");
+        k_sem_give(&stillness_sem);
     }
 }
 
@@ -56,7 +67,6 @@ int heartbeat_init(void)
     }
 
     const struct device *ipc = DEVICE_DT_GET(DT_NODELABEL(ipc0));
-    static struct ipc_ept ep;
 
     int ret = ipc_service_open_instance(ipc);
     if (ret < 0 && ret != -EALREADY) {
@@ -73,5 +83,28 @@ int heartbeat_init(void)
     // wait for flpr to bind its end
     k_sem_take(&ep_bound, K_FOREVER);
     LOG_INF("heartbeat endpoint bound on cpuapp");
+    return 0;
+}
+
+// blocks the calling thread until FLPR says the scale is still
+// this runs on the sysworkq when called from tare so other
+// work items like DRDY will be delayed until stillness is confirmed
+int heartbeat_request_stillness(void)
+{
+    // drain any stale signals
+    k_sem_reset(&stillness_sem);
+
+    uint8_t msg = STILLNESS_REQUEST;
+    int ret = ipc_service_send(&ep, &msg, sizeof(msg));
+    if (ret < 0) {
+        LOG_ERR("Failed to send STILLNESS_REQUEST: %d", ret);
+        return ret;
+    }
+
+    ret = k_sem_take(&stillness_sem, K_SECONDS(STILLNESS_TIMEOUT_SEC));
+    if (ret == -EAGAIN) {
+        LOG_WRN("Stillness timeout after %ds, taring anyway", STILLNESS_TIMEOUT_SEC);
+    }
+
     return 0;
 }

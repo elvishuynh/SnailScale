@@ -9,6 +9,9 @@
 #include <pt18_matrix/pt18_matrix_text.h>
 #include <sensor/nau7802_loadcell/nau7802_loadcell.h>
 
+#include "heartbeat.h"
+#include "symbols.h"
+
 LOG_MODULE_REGISTER(scale_logic, CONFIG_LOG_DEFAULT_LEVEL);
 
 static double tare_offset;
@@ -17,6 +20,13 @@ static const struct device *nau_dev_ptr;
 
 void scale_tare(void)
 {
+	// show movement symbol while we wait for scale to settle
+	pt18_matrix_clear(tm_dev);
+	pt18_matrix_write(tm_dev, sym_movement, sizeof(sym_movement));
+
+	// blocks until FLPR confirms stillness or timeout
+	heartbeat_request_stillness();
+
 	pt18_matrix_print(tm_dev, "---", 0);
 
 	double sum = 0;
