@@ -29,7 +29,7 @@
 
     ipc {
         ipc0: ipc0 {
-            compatible = "zephyr,ipc-icmsg";
+            compatible = "zephyr,ipc-icmsg-me-follower";
             dcache-alignment = <32>;
             tx-region = <&sram_tx>;
             rx-region = <&sram_rx>;

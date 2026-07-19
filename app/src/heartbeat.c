@@ -1,8 +1,10 @@
+#include "heartbeat.h"
+
 #include <zephyr/kernel.h>
 #include <zephyr/ipc/ipc_service.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(flpr_main, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(heartbeat, CONFIG_LOG_DEFAULT_LEVEL);
 
 static K_SEM_DEFINE(ep_bound, 0, 1);
 
@@ -11,7 +13,9 @@ static void ep_bound_cb(void *priv) {
 }
 
 static void ep_recv_cb(const void *data, size_t len, void *priv) {
-    // flpr doesnt expect inbound data yet
+    if (len < 1) return;
+    uint8_t counter = ((const uint8_t *)data)[0];
+    LOG_INF("heartbeat rx %u", counter);
 }
 
 static struct ipc_ept_cfg ep_cfg = {
@@ -22,10 +26,10 @@ static struct ipc_ept_cfg ep_cfg = {
     },
 };
 
-int main(void)
+int heartbeat_init(void)
 {
     const struct device *ipc = DEVICE_DT_GET(DT_NODELABEL(ipc0));
-    struct ipc_ept ep;
+    static struct ipc_ept ep;
 
     int ret = ipc_service_open_instance(ipc);
     if (ret < 0 && ret != -EALREADY) {
@@ -39,15 +43,8 @@ int main(void)
         return ret;
     }
 
-    // wait for cpuapp to bind
+    // wait for flpr to bind its end
     k_sem_take(&ep_bound, K_FOREVER);
-    LOG_INF("heartbeat endpoint bound");
-
-    uint8_t counter = 0;
-    while (1) {
-        ipc_service_send(&ep, &counter, sizeof(counter));
-        counter++;
-        k_sleep(K_MSEC(1000));
-    }
+    LOG_INF("heartbeat endpoint bound on cpuapp");
     return 0;
 }

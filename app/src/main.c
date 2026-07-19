@@ -1,6 +1,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
 
@@ -13,6 +14,7 @@
 #include "scale_logic.h"
 #include "touch_sensor.h"
 #include "bluetooth.h"
+#include "heartbeat.h"
 
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
@@ -51,6 +53,23 @@ static int flpr_boot(void) {
 }
 SYS_INIT(flpr_boot, POST_KERNEL, 48);
 
+static const struct gpio_dt_spec led0 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+
+// loop forever toggling the user led
+static void blink_led_loop(void)
+{
+	if (gpio_is_ready_dt(&led0)) {
+		gpio_pin_configure_dt(&led0, GPIO_OUTPUT_INACTIVE);
+	}
+
+	while (1) {
+		if (gpio_is_ready_dt(&led0)) {
+			gpio_pin_toggle_dt(&led0);
+		}
+		k_msleep(1000);
+	}
+}
+
 int main(void)
 {
 	// tm1640 led matrix setup
@@ -88,9 +107,13 @@ int main(void)
 		return -1;
 	}
 
+	if (heartbeat_init() != 0) {
+		LOG_ERR("Failed to initialize heartbeat IPC");
+	}
+
 	LOG_INF("NAU7802 DRDY trigger active");
 
-	k_sleep(K_FOREVER);
+	blink_led_loop();
 
 	return 0;
 }
