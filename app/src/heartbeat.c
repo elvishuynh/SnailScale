@@ -5,7 +5,18 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
+#include "scale_logic.h"
+
+#define TARE_REQUEST 0x01
+
 LOG_MODULE_REGISTER(heartbeat, CONFIG_LOG_DEFAULT_LEVEL);
+
+static struct k_work tare_work;
+
+static void tare_work_handler(struct k_work *work) {
+    LOG_INF("Taring scale via shake");
+    scale_tare();
+}
 
 static K_SEM_DEFINE(ep_bound, 0, 1);
 
@@ -17,18 +28,14 @@ static void ep_bound_cb(void *priv) {
 
 static void ep_recv_cb(const void *data, size_t len, void *priv) {
     if (len < 1) return;
-    uint8_t counter = ((const uint8_t *)data)[0];
+    uint8_t msg = ((const uint8_t *)data)[0];
     
-    if (gpio_is_ready_dt(&led)) {
-        gpio_pin_toggle_dt(&led);
-    }
-
-    // rate limit RTT logging so 1kHz stress test doesn't lock up the console
-    static int64_t last_log = 0;
-    int64_t now = k_uptime_get();
-    if (now - last_log >= 1000) {
-        LOG_INF("heartbeat rx %u", counter);
-        last_log = now;
+    if (msg == TARE_REQUEST) {
+        LOG_INF("Received TARE_REQUEST from FLPR");
+        if (gpio_is_ready_dt(&led)) {
+            gpio_pin_toggle_dt(&led);
+        }
+        k_work_submit(&tare_work);
     }
 }
 
@@ -42,6 +49,8 @@ static struct ipc_ept_cfg ep_cfg = {
 
 int heartbeat_init(void)
 {
+    k_work_init(&tare_work, tare_work_handler);
+
     if (gpio_is_ready_dt(&led)) {
         gpio_pin_configure_dt(&led, GPIO_OUTPUT_INACTIVE);
     }

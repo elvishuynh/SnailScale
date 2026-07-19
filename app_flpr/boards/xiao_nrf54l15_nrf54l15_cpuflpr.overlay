@@ -49,3 +49,20 @@
 &cpuflpr_vevif_rx {
     status = "okay";
 };
+
+/* enable I2C bus and IMU exclusively for FLPR */
+&i2c30 {
+    compatible = "nordic,nrf-twim";
+    status = "okay";
+    pinctrl-0 = <&i2c30_default>;
+    pinctrl-1 = <&i2c30_sleep>;
+    pinctrl-names = "default", "sleep";
+    clock-frequency = <I2C_BITRATE_FAST>;
+
+    lsm6ds3tr_c: lsm6ds3tr-c@6a {
+        compatible = "st,lsm6dsl";
+        reg = <0x6a>;
+        irq-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
+        status = "okay";
+    };
+};

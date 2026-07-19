@@ -131,3 +131,11 @@ dmic_dev: &pdm20 {
                 };
         };
 };
+
+&i2c30 {
+        status = "disabled";
+};
+
+&lsm6ds3tr_c {
+        status = "disabled";
+};
