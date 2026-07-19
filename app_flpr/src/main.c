@@ -45,9 +45,17 @@ int main(void)
 
     uint8_t counter = 0;
     while (1) {
-        ipc_service_send(&ep, &counter, sizeof(counter));
+        int err = ipc_service_send(&ep, &counter, sizeof(counter));
+        if (err < 0) {
+            LOG_ERR("ipc send failed: %d", err);
+        }
         counter++;
+
+#ifdef CONFIG_HEARTBEAT_STRESS_TEST
+        k_sleep(K_MSEC(1));
+#else
         k_sleep(K_MSEC(1000));
+#endif
     }
     return 0;
 }

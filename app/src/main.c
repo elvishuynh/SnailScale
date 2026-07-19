@@ -53,23 +53,6 @@ static int flpr_boot(void) {
 }
 SYS_INIT(flpr_boot, POST_KERNEL, 48);
 
-static const struct gpio_dt_spec led0 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
-
-// loop forever toggling the user led
-static void blink_led_loop(void)
-{
-	if (gpio_is_ready_dt(&led0)) {
-		gpio_pin_configure_dt(&led0, GPIO_OUTPUT_INACTIVE);
-	}
-
-	while (1) {
-		if (gpio_is_ready_dt(&led0)) {
-			gpio_pin_toggle_dt(&led0);
-		}
-		k_msleep(1000);
-	}
-}
-
 int main(void)
 {
 	// tm1640 led matrix setup
@@ -113,7 +96,7 @@ int main(void)
 
 	LOG_INF("NAU7802 DRDY trigger active");
 
-	blink_led_loop();
+	k_sleep(K_FOREVER);
 
 	return 0;
 }
