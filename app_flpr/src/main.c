@@ -189,7 +189,7 @@ static void ep_recv_cb(const void *data, size_t len, void *priv) {
 }
 
 static struct ipc_ept_cfg ep_cfg = {
-    .name = "heartbeat",
+    .name = "motion_ipc",
     .cb = {
         .bound    = ep_bound_cb,
         .received = ep_recv_cb,

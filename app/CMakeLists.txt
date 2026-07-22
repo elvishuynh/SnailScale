@@ -25,7 +25,7 @@ target_sources(app PRIVATE
     src/scale_logic.c
     src/touch_sensor.c
     src/bluetooth.c
-    src/heartbeat.c
+    src/motion_ipc.c
 )
 
 target_include_directories(app PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include")

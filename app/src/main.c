@@ -14,7 +14,7 @@
 #include "scale_logic.h"
 #include "touch_sensor.h"
 #include "bluetooth.h"
-#include "heartbeat.h"
+#include "motion_ipc.h"
 
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
@@ -85,11 +85,10 @@ int main(void)
 		LOG_ERR("Failed to initialize touch sensor");
 	}
 
-	// ipc must be up before scale_logic_init because scale_tare
-	// sends a STILLNESS_REQUEST to FLPR and blocks until confirmed
-	// flpr is already booted via SYS_INIT at POST_KERNEL 48
-	if (heartbeat_init() != 0) {
-		LOG_ERR("Failed to initialize heartbeat IPC");
+	// ipc must be up before scale logic starts
+	// flpr is already booted
+	if (motion_ipc_init() != 0) {
+		LOG_ERR("Failed to initialize motion IPC");
 	}
 
 	if (scale_logic_init(nau_dev, tm_dev) != 0) {

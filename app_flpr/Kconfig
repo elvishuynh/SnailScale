@@ -2,6 +2,6 @@ mainmenu "FLPR App"
 
 source "Kconfig.zephyr"
 
-config HEARTBEAT_STRESS_TEST
-	bool "Blast heartbeats at 1ms for stress testing"
+config MOTION_IPC_STRESS_TEST
+	bool "Blast messages for stress testing"
 	default n

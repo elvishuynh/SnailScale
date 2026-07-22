@@ -9,7 +9,7 @@
 #include <pt18_matrix/pt18_matrix_text.h>
 #include <sensor/nau7802_loadcell/nau7802_loadcell.h>
 
-#include "heartbeat.h"
+#include "motion_ipc.h"
 #include "symbols.h"
 
 LOG_MODULE_REGISTER(scale_logic, CONFIG_LOG_DEFAULT_LEVEL);
@@ -22,7 +22,7 @@ void scale_tare(void)
 {
 	pt18_matrix_clear(tm_dev);
 
-	heartbeat_send_stillness_request();
+	motion_ipc_send_stillness_request();
 
 	int iterations = 0;
 	
@@ -39,7 +39,7 @@ void scale_tare(void)
 			pt18_matrix_write(tm_dev, sym_movement_d, sizeof(sym_movement_d));
 		}
 		
-		if (heartbeat_wait_stillness(250) == 0) {
+		if (motion_ipc_wait_stillness(250) == 0) {
 			break;
 		}
 		

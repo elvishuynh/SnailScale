@@ -1,4 +1,4 @@
-#include "heartbeat.h"
+#include "motion_ipc.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/ipc/ipc_service.h>
@@ -11,10 +11,7 @@
 #define STILLNESS_REQUEST 0x02
 #define STILLNESS_CONFIRMED 0x03
 
-// 30s timeout if scale never settles
-#define STILLNESS_TIMEOUT_SEC 30
-
-LOG_MODULE_REGISTER(heartbeat, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(motion_ipc, CONFIG_LOG_DEFAULT_LEVEL);
 
 static struct k_work tare_work;
 
@@ -51,14 +48,14 @@ static void ep_recv_cb(const void *data, size_t len, void *priv) {
 }
 
 static struct ipc_ept_cfg ep_cfg = {
-    .name = "heartbeat",
+    .name = "motion_ipc",
     .cb = {
         .bound    = ep_bound_cb,
         .received = ep_recv_cb,
     },
 };
 
-int heartbeat_init(void)
+int motion_ipc_init(void)
 {
     k_work_init(&tare_work, tare_work_handler);
 
@@ -80,18 +77,16 @@ int heartbeat_init(void)
         return ret;
     }
 
-    // wait for flpr to bind its end
+    // wait for flpr to bind
     k_sem_take(&ep_bound, K_FOREVER);
-    LOG_INF("heartbeat endpoint bound on cpuapp");
+    LOG_INF("motion ipc endpoint bound on cpuapp");
     return 0;
 }
 
-// blocks the calling thread until FLPR says the scale is still
-// this runs on the sysworkq when called from tare so other
-// work items like DRDY will be delayed until stillness is confirmed
-int heartbeat_send_stillness_request(void)
+// blocks until stillness is confirmed
+int motion_ipc_send_stillness_request(void)
 {
-    // drain any stale signals
+    // drain stale signals
     k_sem_reset(&stillness_sem);
 
     uint8_t msg = STILLNESS_REQUEST;
@@ -103,9 +98,8 @@ int heartbeat_send_stillness_request(void)
     return 0;
 }
 
-// blocks the calling thread until FLPR says the scale is still
-// returns 0 if still, -EAGAIN if timeout
-int heartbeat_wait_stillness(int timeout_ms)
+// returns zero if still or error if timeout
+int motion_ipc_wait_stillness(int timeout_ms)
 {
     return k_sem_take(&stillness_sem, K_MSEC(timeout_ms));
 }
