@@ -2,8 +2,12 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/sensor.h>
+#include <zephyr/devicetree.h>
 #include <stdio.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/zbus/zbus.h>
+
+#include "events.h"
 
 #include <pt18_matrix/pt18_matrix.h>
 #include <pt18_matrix/pt18_matrix_text.h>
@@ -15,12 +19,11 @@
 LOG_MODULE_REGISTER(scale_logic, CONFIG_LOG_DEFAULT_LEVEL);
 
 static double tare_offset;
-static const struct device *tm_dev;
 static const struct device *nau_dev_ptr;
 
-void scale_tare(void)
+static void scale_tare(void)
 {
-	pt18_matrix_clear(tm_dev);
+	pt18_matrix_clear();
 
 	motion_ipc_send_stillness_request();
 
@@ -30,13 +33,13 @@ void scale_tare(void)
 	while (iterations < 120) {
 		int frame = iterations % 4;
 		if (frame == 0) {
-			pt18_matrix_write(tm_dev, sym_movement_a, sizeof(sym_movement_a));
+			pt18_matrix_write(sym_movement_a, sizeof(sym_movement_a));
 		} else if (frame == 1) {
-			pt18_matrix_write(tm_dev, sym_movement_b, sizeof(sym_movement_b));
+			pt18_matrix_write(sym_movement_b, sizeof(sym_movement_b));
 		} else if (frame == 2) {
-			pt18_matrix_write(tm_dev, sym_movement_c, sizeof(sym_movement_c));
+			pt18_matrix_write(sym_movement_c, sizeof(sym_movement_c));
 		} else {
-			pt18_matrix_write(tm_dev, sym_movement_d, sizeof(sym_movement_d));
+			pt18_matrix_write(sym_movement_d, sizeof(sym_movement_d));
 		}
 		
 		if (motion_ipc_wait_stillness(250) == 0) {
@@ -50,7 +53,7 @@ void scale_tare(void)
 		LOG_WRN("Stillness timeout after 30s, taring anyway");
 	}
 
-	pt18_matrix_print(tm_dev, "---", 0);
+	pt18_matrix_print("---", 0);
 
 	double sum = 0;
 	struct sensor_value val;
@@ -88,14 +91,17 @@ static void nau7802_drdy_handler(const struct device *dev,
 		snprintf(str, sizeof(str), "%4.1f", net_weight);
 	}
 
-	pt18_matrix_clear(tm_dev);
-	pt18_matrix_print(tm_dev, str, 0);
+	pt18_matrix_clear();
+	pt18_matrix_print(str, 0);
 }
 
-int scale_logic_init(const struct device *nau_dev, const struct device *display_dev)
+int scale_logic_init(void)
 {
-	tm_dev = display_dev;
-	nau_dev_ptr = nau_dev;
+	nau_dev_ptr = DEVICE_DT_GET(DT_NODELABEL(nau7802));
+	if (!device_is_ready(nau_dev_ptr)) {
+		LOG_ERR("NAU7802 device not ready");
+		return -ENODEV;
+	}
 
 	while (sensor_sample_fetch(nau_dev_ptr) == -EBUSY) {
 		k_msleep(50);
@@ -116,3 +122,35 @@ int scale_logic_init(const struct device *nau_dev, const struct device *display_
 
 	return 0;
 }
+
+ZBUS_SUBSCRIBER_DEFINE(scale_tare_sub, 4);
+
+ZBUS_CHAN_DEFINE(tare_request_chan,
+		 struct tare_request_msg,
+		 NULL,
+		 NULL,
+		 ZBUS_OBSERVERS(scale_tare_sub),
+		 ZBUS_MSG_INIT(0)
+);
+
+static void scale_tare_thread(void)
+{
+	const struct zbus_channel *chan;
+
+	while (!zbus_sub_wait(&scale_tare_sub, &chan, K_FOREVER)) {
+		if (chan == &tare_request_chan) {
+			LOG_INF("Tare requested via zbus");
+
+			struct sensor_trigger trig = {
+				.type = SENSOR_TRIG_DATA_READY,
+				.chan = (enum sensor_channel)SENSOR_CHAN_FORCE,
+			};
+
+			sensor_trigger_set(nau_dev_ptr, &trig, NULL);
+			scale_tare();
+			sensor_trigger_set(nau_dev_ptr, &trig, nau7802_drdy_handler);
+		}
+	}
+}
+
+K_THREAD_DEFINE(scale_tare_thread_id, 1024, scale_tare_thread, NULL, NULL, NULL, 7, 0, 0);

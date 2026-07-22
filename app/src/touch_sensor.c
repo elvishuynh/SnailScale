@@ -5,18 +5,18 @@
 
 LOG_MODULE_REGISTER(touch_sensor, CONFIG_LOG_DEFAULT_LEVEL);
 
+#include "events.h"
+
 static const struct gpio_dt_spec touch_pad = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 static struct gpio_callback touch_cb_data;
 static struct k_work_delayable long_press_work;
 static struct k_work_delayable debounce_work;
-static void (*long_press_cb)(void) = NULL;
 
 static void long_press_work_handler(struct k_work *work)
 {
-	LOG_INF("Touch pad held for 2s. Firing callback.");
-	if (long_press_cb) {
-		long_press_cb();
-	}
+	LOG_INF("Touch pad held for 2s. Firing zbus event.");
+	struct tare_request_msg msg;
+	zbus_chan_pub(&tare_request_chan, &msg, K_NO_WAIT);
 }
 
 static void debounce_work_handler(struct k_work *work)
@@ -39,7 +39,7 @@ static void touch_pad_isr(const struct device *dev, struct gpio_callback *cb, ui
 	k_work_reschedule(&debounce_work, K_MSEC(5));
 }
 
-int touch_sensor_init(void (*on_long_press)(void))
+int touch_sensor_init(void)
 {
 	int ret;
 
@@ -47,8 +47,6 @@ int touch_sensor_init(void (*on_long_press)(void))
 		LOG_ERR("Touch pad GPIO not ready");
 		return -1;
 	}
-
-	long_press_cb = on_long_press;
 
 	k_work_init_delayable(&debounce_work, debounce_work_handler);
 	k_work_init_delayable(&long_press_work, long_press_work_handler);

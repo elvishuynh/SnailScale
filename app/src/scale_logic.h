@@ -3,8 +3,7 @@
 
 #include <zephyr/device.h>
 
-void scale_tare(void);
 
-int scale_logic_init(const struct device *nau_dev, const struct device *display_dev);
+int scale_logic_init(void);
 
 #endif

@@ -22,10 +22,12 @@ add_custom_command(
 
 target_sources(app PRIVATE 
     src/main.c
+    src/flpr_control.c
     src/scale_logic.c
     src/touch_sensor.c
     src/bluetooth.c
     src/motion_ipc.c
+    src/fault_handler.c
 )
 
 target_include_directories(app PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include")

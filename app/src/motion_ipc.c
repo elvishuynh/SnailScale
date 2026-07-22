@@ -5,20 +5,14 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
-#include "scale_logic.h"
-
+#include <zephyr/zbus/zbus.h>
+#include "events.h"
 #define TARE_REQUEST 0x01
 #define STILLNESS_REQUEST 0x02
 #define STILLNESS_CONFIRMED 0x03
 
 LOG_MODULE_REGISTER(motion_ipc, CONFIG_LOG_DEFAULT_LEVEL);
 
-static struct k_work tare_work;
-
-static void tare_work_handler(struct k_work *work) {
-    LOG_INF("Taring scale via shake");
-    scale_tare();
-}
 
 static K_SEM_DEFINE(ep_bound, 0, 1);
 static K_SEM_DEFINE(stillness_sem, 0, 1);
@@ -40,7 +34,8 @@ static void ep_recv_cb(const void *data, size_t len, void *priv) {
         if (gpio_is_ready_dt(&led)) {
             gpio_pin_toggle_dt(&led);
         }
-        k_work_submit(&tare_work);
+        struct tare_request_msg tare_msg;
+        zbus_chan_pub(&tare_request_chan, &tare_msg, K_NO_WAIT);
     } else if (msg == STILLNESS_CONFIRMED) {
         LOG_INF("FLPR confirmed stillness");
         k_sem_give(&stillness_sem);
@@ -57,7 +52,6 @@ static struct ipc_ept_cfg ep_cfg = {
 
 int motion_ipc_init(void)
 {
-    k_work_init(&tare_work, tare_work_handler);
 
     if (gpio_is_ready_dt(&led)) {
         gpio_pin_configure_dt(&led, GPIO_OUTPUT_INACTIVE);
