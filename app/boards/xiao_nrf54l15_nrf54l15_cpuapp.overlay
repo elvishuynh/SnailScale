@@ -113,7 +113,7 @@ dmic_dev: &pdm20 {
                 compatible = "nuvoton,nau7802_loadcell";
                 reg = <0x2a>;
                 drdy-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
-                conversions-per-second = <10>;
+                conversions-per-second = <20>;
                 gain = <128>;
         };
 };
