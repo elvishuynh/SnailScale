@@ -28,6 +28,7 @@ target_sources(app PRIVATE
     src/bluetooth.c
     src/motion_ipc.c
     src/fault_handler.c
+    src/display_manager.c
 )
 
 target_include_directories(app PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include")

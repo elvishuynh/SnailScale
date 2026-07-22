@@ -6,6 +6,7 @@
 LOG_MODULE_REGISTER(touch_sensor, CONFIG_LOG_DEFAULT_LEVEL);
 
 #include "events.h"
+#include "display_manager.h"
 
 static const struct gpio_dt_spec touch_pad = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 static struct gpio_callback touch_cb_data;
@@ -21,6 +22,8 @@ static void long_press_work_handler(struct k_work *work)
 
 static void debounce_work_handler(struct k_work *work)
 {
+	display_manager_register_activity();
+
 	int val = gpio_pin_get_dt(&touch_pad);
 	if (val > 0) {
 		LOG_INF("touch detected (debounced)");

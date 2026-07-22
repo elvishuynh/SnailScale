@@ -11,8 +11,7 @@
 
 #include "events.h"
 
-#include <pt18_matrix/pt18_matrix.h>
-#include <pt18_matrix/pt18_matrix_text.h>
+#include "display_manager.h"
 #include <sensor/nau7802_loadcell/nau7802_loadcell.h>
 
 #include "motion_ipc.h"
@@ -46,7 +45,8 @@ static char last_str[16] = {0};
 
 static void scale_tare(void)
 {
-	pt18_matrix_clear();
+	display_manager_register_activity();
+	display_manager_clear();
 
 	motion_ipc_send_stillness_request();
 
@@ -56,13 +56,13 @@ static void scale_tare(void)
 	while (iterations < 120) {
 		int frame = iterations % 4;
 		if (frame == 0) {
-			pt18_matrix_write(sym_movement_a, sizeof(sym_movement_a));
+			display_manager_write(sym_movement_a, sizeof(sym_movement_a));
 		} else if (frame == 1) {
-			pt18_matrix_write(sym_movement_b, sizeof(sym_movement_b));
+			display_manager_write(sym_movement_b, sizeof(sym_movement_b));
 		} else if (frame == 2) {
-			pt18_matrix_write(sym_movement_c, sizeof(sym_movement_c));
+			display_manager_write(sym_movement_c, sizeof(sym_movement_c));
 		} else {
-			pt18_matrix_write(sym_movement_d, sizeof(sym_movement_d));
+			display_manager_write(sym_movement_d, sizeof(sym_movement_d));
 		}
 		
 		if (motion_ipc_wait_stillness(250) == 0) {
@@ -76,7 +76,7 @@ static void scale_tare(void)
 		LOG_WRN("Stillness timeout after 30s, taring anyway");
 	}
 
-	pt18_matrix_print("---", 0);
+	display_manager_print("---", 0);
 
 	double sum = 0;
 	struct sensor_value val;
@@ -137,7 +137,8 @@ static void nau7802_drdy_handler(const struct device *dev,
 	}
 	strcpy(last_str, str);
 
-	pt18_matrix_print(str, 0);
+	display_manager_register_activity();
+	display_manager_print(str, 0);
 }
 
 int scale_logic_init(void)

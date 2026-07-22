@@ -4,20 +4,21 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
-#include <pt18_matrix/pt18_matrix.h>
+
 #include "scale_logic.h"
 #include "touch_sensor.h"
 #include "bluetooth.h"
 #include "motion_ipc.h"
 #include "fault_handler.h"
+#include "display_manager.h"
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 int main(void)
 {
 	LOG_INF("PT18 matrix scroll demo started");
 
-	if (pt18_matrix_init() != 0) {
-		system_fault_handler("PT18 matrix init failed");
+	if (display_manager_init() != 0) {
+		system_fault_handler("Display manager init failed");
 	}
 
 
@@ -35,6 +36,7 @@ int main(void)
 	if (motion_ipc_init() != 0) {
 		system_fault_handler("Motion IPC init failed");
 	}
+
 
 	if (scale_logic_init() != 0) {
 		system_fault_handler("Scale logic init failed");
