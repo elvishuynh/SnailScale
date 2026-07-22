@@ -4,6 +4,7 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/devicetree.h>
 #include <stdio.h>
+#include <string.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
 #include <math.h>
@@ -109,6 +110,12 @@ static void nau7802_drdy_handler(const struct device *dev,
 	} else {
 		snprintf(str, sizeof(str), "%4.1f", ema_weight);
 	}
+
+	static char last_str[16] = {0};
+	if (strcmp(str, last_str) == 0) {
+		return;
+	}
+	strcpy(last_str, str);
 
 	pt18_matrix_clear();
 	pt18_matrix_print(str, 0);
