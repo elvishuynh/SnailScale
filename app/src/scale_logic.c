@@ -117,7 +117,6 @@ static void nau7802_drdy_handler(const struct device *dev,
 	}
 	strcpy(last_str, str);
 
-	pt18_matrix_clear();
 	pt18_matrix_print(str, 0);
 }
 
