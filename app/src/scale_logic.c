@@ -23,6 +23,10 @@ LOG_MODULE_REGISTER(scale_logic, CONFIG_LOG_DEFAULT_LEVEL);
 static double tare_offset;
 static const struct device *nau_dev_ptr;
 
+static double last_displayed_weight = 0.0;
+static bool first_sample = true;
+static char last_str[16] = {0};
+
 static void scale_tare(void)
 {
 	pt18_matrix_clear();
@@ -68,6 +72,9 @@ static void scale_tare(void)
 	}
 
 	tare_offset = sum / 10.0;
+
+	first_sample = true;
+	last_str[0] = '\0';
 }
 
 // drdy fires from the global workqueue when nau7802 has a new sample
@@ -85,9 +92,6 @@ static void nau7802_drdy_handler(const struct device *dev,
 	double net_weight = (sensor_value_to_double(&val) - tare_offset) / 10000.0;
 
 	// check deadband
-	static double last_displayed_weight = 0.0;
-	static bool first_sample = true;
-
 	if (first_sample) {
 		first_sample = false;
 	} else {
@@ -108,7 +112,6 @@ static void nau7802_drdy_handler(const struct device *dev,
 		snprintf(str, sizeof(str), "%4.1f", net_weight);
 	}
 
-	static char last_str[16] = {0};
 	if (strcmp(str, last_str) == 0) {
 		return;
 	}
