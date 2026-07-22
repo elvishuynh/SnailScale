@@ -18,12 +18,29 @@
 #include "motion_ipc.h"
 #include "symbols.h"
 
+#define SCALE_FILTER_SETTING 2
+
+static double get_ema_alpha(int setting) {
+	switch (setting) {
+		case 2: return 0.500;
+		case 4: return 0.250;
+		case 6: return 0.167;
+		case 8: return 0.125;
+		case 16: return 0.0625;
+		case 32: return 0.031;
+		case 64: return 0.015;
+		case 128: return 0.0078;
+		default: return 0.0625;
+	}
+}
+
 LOG_MODULE_REGISTER(scale_logic, CONFIG_LOG_DEFAULT_LEVEL);
 
 static double tare_offset;
 static const struct device *nau_dev_ptr;
 
 static double last_displayed_weight = 0.0;
+static double ema_weight = 0.0;
 static bool first_sample = true;
 static char last_str[16] = {0};
 
@@ -91,25 +108,28 @@ static void nau7802_drdy_handler(const struct device *dev,
 	 * fit on our 3 digit and 17 column display */
 	double net_weight = (sensor_value_to_double(&val) - tare_offset) / 10000.0;
 
-	// check deadband
 	if (first_sample) {
+		ema_weight = net_weight;
 		first_sample = false;
 	} else {
-		if (fabs(net_weight - last_displayed_weight) < 0.1) {
+		double alpha = get_ema_alpha(SCALE_FILTER_SETTING);
+		ema_weight = alpha * net_weight + (1.0 - alpha) * ema_weight;
+		
+		if (fabs(ema_weight - last_displayed_weight) < 0.1) {
 			return;
 		}
 	}
 
-	last_displayed_weight = net_weight;
+	last_displayed_weight = ema_weight;
 
 	char str[16];
 
 	// hardware decimal requires exactly four chars padded right
 	// otherwise the hardwired led column logic misses it and throws into the void
-	if (net_weight < -9.9) {
-		snprintf(str, sizeof(str), "%4.0f", net_weight);
+	if (ema_weight < -9.9) {
+		snprintf(str, sizeof(str), "%4.0f", ema_weight);
 	} else {
-		snprintf(str, sizeof(str), "%4.1f", net_weight);
+		snprintf(str, sizeof(str), "%4.1f", ema_weight);
 	}
 
 	if (strcmp(str, last_str) == 0) {
