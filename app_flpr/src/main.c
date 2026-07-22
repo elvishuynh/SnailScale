@@ -9,6 +9,8 @@ LOG_MODULE_REGISTER(flpr_main, LOG_LEVEL_INF);
 #define TARE_REQUEST 0x01
 #define STILLNESS_REQUEST 0x02
 #define STILLNESS_CONFIRMED 0x03
+#define SLEEP_REQUEST 0x04
+#define WAKE_REQUEST 0x05
 
 static const struct i2c_dt_spec imu_i2c = I2C_DT_SPEC_GET(DT_NODELABEL(lsm6ds3tr_c));
 
@@ -33,6 +35,7 @@ static size_t history_count = 0;
 
 // stillness detection state
 static volatile bool awaiting_stillness;
+static volatile bool is_asleep = false;
 static int still_count;
 static struct ipc_ept ep;
 
@@ -108,6 +111,29 @@ static bool detect_shake_gesture(int16_t *buffer, size_t num_samples) {
 static K_SEM_DEFINE(shake_sem, 0, 1);
 
 static void imu_trigger_handler(const struct device *dev, const struct sensor_trigger *trig) {
+    if (is_asleep) {
+        // Read wake-up source to clear interrupt
+        uint8_t wake_src;
+        i2c_reg_read_byte_dt(&imu_i2c, 0x1B, &wake_src); // WAKE_UP_SRC
+        
+        is_asleep = false;
+        
+        uint8_t msg = WAKE_REQUEST;
+        ipc_service_send(&ep, &msg, sizeof(msg));
+        LOG_INF("Motion detected! Sent WAKE_REQUEST to CPUAPP");
+        
+        // Restore FIFO mode
+        i2c_reg_write_byte_dt(&imu_i2c, 0x5E, 0x00); // MD1_CFG (Disable wake-up on INT1)
+        i2c_reg_write_byte_dt(&imu_i2c, 0x58, 0x00); // TAP_CFG (Disable interrupts and slope)
+        
+        i2c_reg_write_byte_dt(&imu_i2c, 0x0A, 0x0E); // FIFO_CTRL5 (12.5Hz, Continuous mode)
+        i2c_reg_write_byte_dt(&imu_i2c, 0x0D, 0x08); // INT1_CTRL (Enable FTH on INT1)
+        
+        history_count = 0;
+        history_idx = 0;
+        return;
+    }
+
     uint8_t status1, status2;
     i2c_reg_read_byte_dt(&imu_i2c, 0x3A, &status1);
     i2c_reg_read_byte_dt(&imu_i2c, 0x3B, &status2);
@@ -185,6 +211,21 @@ static void ep_recv_cb(const void *data, size_t len, void *priv) {
         LOG_INF("Stillness check requested by cpuapp");
         still_count = 0;
         awaiting_stillness = true;
+    } else if (msg == SLEEP_REQUEST) {
+        LOG_INF("Sleep requested by cpuapp");
+        is_asleep = true;
+        
+        // reconfigure IMU for Wake-on-Motion (slope/any-motion)
+        i2c_reg_write_byte_dt(&imu_i2c, 0x0D, 0x00); // INT1_CTRL (disable FTH on INT1)
+        i2c_reg_write_byte_dt(&imu_i2c, 0x0A, 0x00); // FIFO_CTRL5 (disable FIFO)
+        
+        // configure wake-up
+        i2c_reg_write_byte_dt(&imu_i2c, 0x58, 0x90); // TAP_CFG (Enable interrupts and slope)
+        i2c_reg_write_byte_dt(&imu_i2c, 0x5B, 0x02); // WAKE_UP_THS (threshold for wake up)
+        i2c_reg_write_byte_dt(&imu_i2c, 0x5C, 0x00); // WAKE_UP_DUR (no duration required)
+        i2c_reg_write_byte_dt(&imu_i2c, 0x5E, 0x20); // MD1_CFG (Route wake-up to INT1)
+        
+        LOG_INF("IMU configured for Wake-on-Motion");
     }
 }
 

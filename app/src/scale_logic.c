@@ -203,6 +203,14 @@ ZBUS_CHAN_DEFINE(tare_request_chan,
 		 ZBUS_MSG_INIT(0)
 );
 
+ZBUS_CHAN_DEFINE(wake_request_chan,
+		 struct wake_request_msg,
+		 NULL,
+		 NULL,
+		 ZBUS_OBSERVERS(scale_tare_sub),
+		 ZBUS_MSG_INIT(0)
+);
+
 static void scale_tare_thread(void)
 {
 	const struct zbus_channel *chan;
@@ -219,6 +227,14 @@ static void scale_tare_thread(void)
 			sensor_trigger_set(nau_dev_ptr, &trig, NULL);
 			scale_tare();
 			sensor_trigger_set(nau_dev_ptr, &trig, nau7802_drdy_handler);
+		} else if (chan == &wake_request_chan) {
+			LOG_INF("Wake requested via zbus");
+#ifdef CONFIG_PM_DEVICE
+			pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_RESUME);
+#endif
+			display_manager_power_on();
+			display_manager_register_activity();
+			scale_logic_register_activity();
 		}
 	}
 }

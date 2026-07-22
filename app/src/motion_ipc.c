@@ -11,6 +11,7 @@
 #define STILLNESS_REQUEST 0x02
 #define STILLNESS_CONFIRMED 0x03
 #define SLEEP_REQUEST 0x04
+#define WAKE_REQUEST 0x05
 
 LOG_MODULE_REGISTER(motion_ipc, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -40,6 +41,10 @@ static void ep_recv_cb(const void *data, size_t len, void *priv) {
     } else if (msg == STILLNESS_CONFIRMED) {
         LOG_INF("FLPR confirmed stillness");
         k_sem_give(&stillness_sem);
+    } else if (msg == WAKE_REQUEST) {
+        LOG_INF("Received WAKE_REQUEST from FLPR");
+        struct wake_request_msg wake_msg;
+        zbus_chan_pub(&wake_request_chan, &wake_msg, K_NO_WAIT);
     }
 }
 
