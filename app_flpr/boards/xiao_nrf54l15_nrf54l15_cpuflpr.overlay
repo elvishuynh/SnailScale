@@ -12,18 +12,24 @@
     };
 
     soc {
-        reserved-memory {
-            #address-cells = <1>;
-            #size-cells = <1>;
-            ranges;
+        /delete-node/ memory@2002f000;
+        cpuflpr_sram: memory@20028000 {
+            compatible = "mmio-sram";
+            reg = <0x20028000 0x18000>;
+        };
+    };
 
-            sram_tx: memory@20020000 {
-                reg = <0x20020000 0x0800>;
-            };
+    reserved-memory {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        ranges;
 
-            sram_rx: memory@20018000 {
-                reg = <0x20018000 0x0800>;
-            };
+        sram_tx: memory@20020000 {
+            reg = <0x20020000 0x0800>;
+        };
+
+        sram_rx: memory@20018000 {
+            reg = <0x20018000 0x0800>;
         };
     };
 
