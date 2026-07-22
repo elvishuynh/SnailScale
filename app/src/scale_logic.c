@@ -8,6 +8,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
 #include <math.h>
+#include <math.h>
+#include <zephyr/pm/device.h>
 
 #include "events.h"
 
@@ -43,9 +45,27 @@ static double ema_weight = 0.0;
 static bool first_sample = true;
 static char last_str[16] = {0};
 
+static struct k_work_delayable sleep_work;
+
+static void sleep_work_handler(struct k_work *work)
+{
+	LOG_INF("Inactivity timeout, entering sleep mode");
+	motion_ipc_send_sleep_request();
+	display_manager_power_off();
+#ifdef CONFIG_PM_DEVICE
+	pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_SUSPEND);
+#endif
+}
+
+void scale_logic_register_activity(void)
+{
+	k_work_reschedule(&sleep_work, K_SECONDS(15));
+}
+
 static void scale_tare(void)
 {
 	display_manager_register_activity();
+	scale_logic_register_activity();
 	display_manager_clear();
 
 	motion_ipc_send_stillness_request();
@@ -138,6 +158,7 @@ static void nau7802_drdy_handler(const struct device *dev,
 	strcpy(last_str, str);
 
 	display_manager_register_activity();
+	scale_logic_register_activity();
 	display_manager_print(str, 0);
 }
 
@@ -152,6 +173,9 @@ int scale_logic_init(void)
 	while (sensor_sample_fetch(nau_dev_ptr) == -EBUSY) {
 		k_msleep(50);
 	}
+
+	k_work_init_delayable(&sleep_work, sleep_work_handler);
+	scale_logic_register_activity();
 
 	scale_tare();
 

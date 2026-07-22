@@ -5,5 +5,6 @@
 
 
 int scale_logic_init(void);
+void scale_logic_register_activity(void);
 
 #endif

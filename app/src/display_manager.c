@@ -52,6 +52,13 @@ void display_manager_set_brightness(uint8_t level)
 	k_msgq_put(&display_msgq, &msg, K_NO_WAIT);
 }
 
+void display_manager_power_off(void)
+{
+	struct display_msg msg;
+	msg.type = MSG_DISPLAY_POWER_OFF;
+	k_msgq_put(&display_msgq, &msg, K_NO_WAIT);
+}
+
 void display_manager_register_activity(void)
 {
 	display_manager_set_brightness(2);
@@ -76,6 +83,9 @@ static void display_thread(void)
 					break;
 				case MSG_DISPLAY_SET_BRIGHTNESS:
 					pt18_matrix_set_brightness(msg.data.brightness.level);
+					break;
+				case MSG_DISPLAY_POWER_OFF:
+					pt18_matrix_power_off();
 					break;
 				default:
 					LOG_WRN("Unknown display message type: %d", msg.type);

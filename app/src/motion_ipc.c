@@ -10,6 +10,7 @@
 #define TARE_REQUEST 0x01
 #define STILLNESS_REQUEST 0x02
 #define STILLNESS_CONFIRMED 0x03
+#define SLEEP_REQUEST 0x04
 
 LOG_MODULE_REGISTER(motion_ipc, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -96,4 +97,16 @@ int motion_ipc_send_stillness_request(void)
 int motion_ipc_wait_stillness(int timeout_ms)
 {
     return k_sem_take(&stillness_sem, K_MSEC(timeout_ms));
+}
+
+int motion_ipc_send_sleep_request(void)
+{
+    uint8_t msg = SLEEP_REQUEST;
+    int ret = ipc_service_send(&ep, &msg, sizeof(msg));
+    if (ret < 0) {
+        LOG_ERR("Failed to send SLEEP_REQUEST: %d", ret);
+        return ret;
+    }
+    LOG_INF("Sent SLEEP_REQUEST to FLPR");
+    return 0;
 }
