@@ -229,12 +229,12 @@ static void scale_tare_thread(void)
 			sensor_trigger_set(nau_dev_ptr, &trig, nau7802_drdy_handler);
 		} else if (chan == &wake_request_chan) {
 			LOG_INF("Wake requested via zbus");
-#ifdef CONFIG_PM_DEVICE
-			pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_RESUME);
-#endif
 			display_manager_power_on();
 			display_manager_register_activity();
 			scale_logic_register_activity();
+#ifdef CONFIG_PM_DEVICE
+			pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_RESUME);
+#endif
 		}
 	}
 }
