@@ -11,7 +11,12 @@ struct wake_request_msg {
 	uint8_t dummy;
 };
 
+struct calibrate_request_msg {
+	uint8_t dummy;
+};
+
 ZBUS_CHAN_DECLARE(tare_request_chan);
 ZBUS_CHAN_DECLARE(wake_request_chan);
+ZBUS_CHAN_DECLARE(calibrate_request_chan);
 
 #endif

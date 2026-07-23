@@ -13,11 +13,19 @@ static struct gpio_callback touch_cb_data;
 static struct k_work_delayable long_press_work;
 static struct k_work_delayable debounce_work;
 
+static int tap_count = 0;
+static int64_t last_tap_time = 0;
+static bool calibrate_fired = false;
+static bool is_touched = false;
+#define TAP_WINDOW_MS 800
+
 static void long_press_work_handler(struct k_work *work)
 {
-	LOG_INF("Touch pad held for 2s. Firing zbus event.");
-	struct tare_request_msg msg;
-	zbus_chan_pub(&tare_request_chan, &msg, K_NO_WAIT);
+	LOG_INF("Touch pad held for 3s. Firing calibrate event.");
+	calibrate_fired = true;
+	struct calibrate_request_msg msg;
+	zbus_chan_pub(&calibrate_request_chan, &msg, K_NO_WAIT);
+	tap_count = 0;
 }
 
 static void debounce_work_handler(struct k_work *work)
@@ -25,14 +33,34 @@ static void debounce_work_handler(struct k_work *work)
 	display_manager_register_activity();
 
 	int val = gpio_pin_get_dt(&touch_pad);
-	if (val > 0) {
+	int64_t now = k_uptime_get();
+
+	if (val > 0 && !is_touched) {
+		is_touched = true;
 		LOG_INF("touch detected (debounced)");
 		/* touch detected */
-		k_work_schedule(&long_press_work, K_SECONDS(2));
-	} else if (val == 0) {
+		if (tap_count == 1 && (now - last_tap_time) < TAP_WINDOW_MS) {
+			tap_count = 2;
+			calibrate_fired = false;
+			k_work_schedule(&long_press_work, K_SECONDS(3));
+		} else {
+			tap_count = 1;
+			last_tap_time = now;
+			k_work_cancel_delayable(&long_press_work);
+		}
+	} else if (val == 0 && is_touched) {
+		is_touched = false;
 		LOG_INF("touch released (debounced)");
-		/* touch released cancel callback */
-		k_work_cancel_delayable(&long_press_work);
+		/* touch released */
+		if (tap_count == 2) {
+			k_work_cancel_delayable(&long_press_work);
+			if (!calibrate_fired) {
+				LOG_INF("Double tap detected. Firing tare event.");
+				struct tare_request_msg msg;
+				zbus_chan_pub(&tare_request_chan, &msg, K_NO_WAIT);
+			}
+			tap_count = 0;
+		}
 	}
 }
 
