@@ -2,6 +2,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/conn.h>
 #include <zephyr/mgmt/mcumgr/transport/smp_bt.h>
 #include <zephyr/logging/log.h>
 
@@ -17,6 +18,28 @@ static const struct bt_data ad[] = {
 // scan response smp service uuid for nrf connect device manager
 static const struct bt_data sd[] = {
 	BT_DATA_BYTES(BT_DATA_UUID128_ALL, SMP_BT_SVC_UUID_VAL),
+};
+
+// log connection events
+static void connected(struct bt_conn *conn, uint8_t err)
+{
+	if (err) {
+		LOG_ERR("Connection failed err %d", err);
+	} else {
+		LOG_INF("Connected");
+	}
+}
+
+// log disconnection events
+static void disconnected(struct bt_conn *conn, uint8_t reason)
+{
+	LOG_INF("Disconnected reason %d", reason);
+}
+
+// register callbacks automatically
+BT_CONN_CB_DEFINE(conn_callbacks) = {
+	.connected = connected,
+	.disconnected = disconnected,
 };
 
 int bluetooth_init(void)
