@@ -13,6 +13,8 @@
 #include "fault_handler.h"
 #include "display_manager.h"
 
+#include <zephyr/dfu/mcuboot.h>
+
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 int main(void)
 {
@@ -50,6 +52,9 @@ int main(void)
 	settings_load();
 
 	LOG_INF("NAU7802 DRDY trigger active");
+
+	// confirm image to prevent rollback
+	boot_write_img_confirmed();
 
 	k_sleep(K_FOREVER);
 
