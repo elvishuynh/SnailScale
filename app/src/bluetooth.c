@@ -30,18 +30,25 @@ static void connected(struct bt_conn *conn, uint8_t err)
 	}
 }
 
+// restart advertising from workqueue
+static struct k_work adv_restart_work;
+
+static void adv_restart_handler(struct k_work *work)
+{
+	int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad),
+			      sd, ARRAY_SIZE(sd));
+	if (err) {
+		LOG_ERR("Advertising failed to restart err %d", err);
+	} else {
+		LOG_INF("Advertising as %s", CONFIG_BT_DEVICE_NAME);
+	}
+}
+
 // log disconnection events
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	LOG_INF("Disconnected reason %d", reason);
-	
-	int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad),
-			      sd, ARRAY_SIZE(sd));
-	if (err) {
-		LOG_ERR("Advertising failed to start err %d", err);
-	} else {
-		LOG_INF("Advertising as %s", CONFIG_BT_DEVICE_NAME);
-	}
+	k_work_submit(&adv_restart_work);
 }
 
 // register callbacks automatically
@@ -52,6 +59,8 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 
 int bluetooth_init(void)
 {
+	k_work_init(&adv_restart_work, adv_restart_handler);
+
 	int err = bt_enable(NULL);
 	if (err) {
 		LOG_ERR("Bluetooth init failed err %d", err);
