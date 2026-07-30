@@ -30,8 +30,8 @@ int main(void)
 
 
 	if (bluetooth_init()) {
-		LOG_ERR("BLE OTA DFU unavailable");
-		// non fatal scale still functions without ota
+		// reboot if bluetooth fails so mcuboot can revert to working firmware
+		system_fault_handler("Bluetooth init failed");
 	}
 
 	if (touch_sensor_init() != 0) {
