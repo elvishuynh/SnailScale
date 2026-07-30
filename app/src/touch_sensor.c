@@ -54,12 +54,11 @@ static void debounce_work_handler(struct k_work *work)
 		/* touch released */
 		if (tap_count == 2) {
 			k_work_cancel_delayable(&long_press_work);
-			if (!calibrate_fired) {
-				LOG_INF("Double tap detected. Firing tare event.");
-				struct tare_request_msg msg;
-				zbus_chan_pub(&tare_request_chan, &msg, K_NO_WAIT);
-			}
 			tap_count = 0;
+		} else if (tap_count == 1) {
+			LOG_INF("Tap detected. Firing tare event.");
+			struct tare_request_msg msg;
+			zbus_chan_pub(&tare_request_chan, &msg, K_NO_WAIT);
 		}
 	}
 }

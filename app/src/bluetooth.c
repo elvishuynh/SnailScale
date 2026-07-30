@@ -34,6 +34,14 @@ static void connected(struct bt_conn *conn, uint8_t err)
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	LOG_INF("Disconnected reason %d", reason);
+	
+	int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad),
+			      sd, ARRAY_SIZE(sd));
+	if (err) {
+		LOG_ERR("Advertising failed to start err %d", err);
+	} else {
+		LOG_INF("Advertising as %s", CONFIG_BT_DEVICE_NAME);
+	}
 }
 
 // register callbacks automatically
