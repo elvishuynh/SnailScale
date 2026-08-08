@@ -1,0 +1,3 @@
+name: xiao-nrf54lm20a
+append:
+  EXTRA_CONF_FILE: "boards/xiao_nrf54lm20a_nrf54lm20a_cpuapp.conf"

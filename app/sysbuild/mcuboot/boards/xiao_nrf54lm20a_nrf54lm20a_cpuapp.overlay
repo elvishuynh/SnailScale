@@ -1,0 +1,20 @@
+#include "../../../dts/partitions_lm20a.dtsi"
+/ {
+	chosen {
+		zephyr,code-partition = &boot_partition;
+	};
+};
+
+/* full LM20A RRAM and SRAM for MCUboot */
+&cpuapp_rram {
+	reg = <0x0 DT_SIZE_K(2036)>;
+};
+
+&cpuapp_sram {
+	reg = <0x20000000 DT_SIZE_K(512)>;
+	ranges = <0x0 0x20000000  0x80000>;
+};
+
+&pmic_i2c {
+	status = "disabled";
+};

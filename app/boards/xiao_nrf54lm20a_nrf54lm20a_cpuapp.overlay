@@ -1,0 +1,134 @@
+#include "../dts/partitions_lm20a.dtsi"
+
+/ {
+        chosen {
+                zephyr,code-partition = &slot0_partition;
+                zephyr,log-ipc = &ipc0;
+        };
+
+        ipc {
+                ipc0: ipc0 {
+                        compatible = "zephyr,ipc-icmsg-me-initiator";
+                        dcache-alignment = <32>;
+                        tx-region = <&sram_tx>;
+                        rx-region = <&sram_rx>;
+                        mboxes = <&cpuapp_vevif_tx 21>, <&cpuapp_vevif_rx 20>;
+                        mbox-names = "tx", "rx";
+                        status = "okay";
+                };
+        };
+
+        zephyr,user {
+                io-channels = <&adc 0>, <&adc 1>, <&adc 2>, <&adc 3>, <&adc 4>, <&adc 5>, <&adc 6>, <&adc 7>;
+        };
+
+        soc {
+                cpuflpr_sram_code_data: memory@20070000 {
+                        compatible = "mmio-sram";
+                        reg = <0x20070000 DT_SIZE_K(64)>;
+                        #address-cells = <1>;
+                        #size-cells = <1>;
+                        ranges = <0x0 0x20070000 DT_SIZE_K(64)>;
+                };
+        };
+
+        reserved-memory {
+                #address-cells = <1>;
+                #size-cells = <1>;
+                ranges;
+
+                sram_tx: memory@20060000 {
+                        reg = <0x20060000 0x0800>;
+                };
+
+                sram_rx: memory@20068000 {
+                        reg = <0x20068000 0x0800>;
+                };
+        };
+};
+
+dmic_dev: &pdm20 {
+        status = "okay";
+};
+
+&cpuapp_rram {
+    reg = <0x0 DT_SIZE_K(2036)>;
+};
+
+&cpuapp_sram {
+    reg = <0x20000000 DT_SIZE_K(384)>;
+};
+
+&cpuflpr_vpr {
+    execution-memory = <&cpuflpr_sram_code_data>;
+    status = "okay";
+};
+
+&cpuapp_vevif_tx {
+    status = "okay";
+};
+
+&cpuapp_vevif_rx {
+    status = "okay";
+};
+
+&tm1640 {
+        din-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
+        clk-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
+};
+
+&pinctrl {
+        i2c22_default: i2c22_default {
+                group1 {
+                        psels = <NRF_PSEL(TWIM_SCL, 1, 30)>,
+                                <NRF_PSEL(TWIM_SDA, 1, 29)>;
+                };
+        };
+
+        i2c22_sleep: i2c22_sleep {
+                group1 {
+                        psels = <NRF_PSEL(TWIM_SCL, 1, 30)>,
+                                <NRF_PSEL(TWIM_SDA, 1, 29)>;
+                        low-power-enable;
+                };
+        };
+};
+
+&i2c22 {
+        compatible = "nordic,nrf-twim";
+        status = "okay";
+        pinctrl-0 = <&i2c22_default>;
+        pinctrl-1 = <&i2c22_sleep>;
+        pinctrl-names = "default", "sleep";
+        clock-frequency = <I2C_BITRATE_STANDARD>;
+
+        nau7802: nau7802@2a {
+                compatible = "nuvoton,nau7802_loadcell";
+                reg = <0x2a>;
+                drdy-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
+                conversions-per-second = <20>;
+                gain = <128>;
+        };
+};
+
+/ {
+        aliases {
+                sw0 = &touch_pad;
+        };
+
+        buttons {
+                compatible = "gpio-keys";
+                touch_pad: touch_pad {
+                        gpios = <&gpio1 9 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+                        label = "Touch Pad D7";
+                };
+        };
+};
+
+&i2c30 {
+        status = "disabled";
+};
+
+&lsm6ds3tr_c {
+        status = "disabled";
+};

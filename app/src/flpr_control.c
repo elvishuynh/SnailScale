@@ -8,16 +8,20 @@
 #include "flpr_firmware.h"
 
 #define FLPR_SRAM_GLOBAL_ADDR (DT_REG_ADDR(DT_NODELABEL(cpuflpr_sram_code_data)))
+#define IPC_TX_ADDR DT_REG_ADDR(DT_NODELABEL(sram_tx))
+#define IPC_TX_SIZE DT_REG_SIZE(DT_NODELABEL(sram_tx))
+#define IPC_RX_ADDR DT_REG_ADDR(DT_NODELABEL(sram_rx))
+#define IPC_RX_SIZE DT_REG_SIZE(DT_NODELABEL(sram_rx))
 
 static int flpr_early_ram_init(void) {
-    power_up_ram(0x20018000, 0x20018800);
-    memset((void *)0x20018000, 0, 0x0800);
-    
-    power_up_ram(0x20020000, 0x20020800);
-    memset((void *)0x20020000, 0, 0x0800);
-    
+    power_up_ram(IPC_TX_ADDR, IPC_TX_ADDR + IPC_TX_SIZE);
+    memset((void *)IPC_TX_ADDR, 0, IPC_TX_SIZE);
+
+    power_up_ram(IPC_RX_ADDR, IPC_RX_ADDR + IPC_RX_SIZE);
+    memset((void *)IPC_RX_ADDR, 0, IPC_RX_SIZE);
+
     power_up_ram(FLPR_SRAM_GLOBAL_ADDR, FLPR_SRAM_GLOBAL_ADDR + FLPR_FIRMWARE_SIZE);
-    
+
     return 0;
 }
 SYS_INIT(flpr_early_ram_init, PRE_KERNEL_1, 0);

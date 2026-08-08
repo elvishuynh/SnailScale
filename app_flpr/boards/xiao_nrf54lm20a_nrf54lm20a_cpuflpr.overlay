@@ -1,0 +1,65 @@
+
+/ {
+    chosen {
+        zephyr,log-ipc = &ipc0;
+    };
+
+    soc {
+        /delete-node/ memory@20067c00;
+        cpuflpr_sram: memory@20070000 {
+            compatible = "mmio-sram";
+            reg = <0x20070000 0x10000>;
+        };
+    };
+
+    reserved-memory {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        ranges;
+
+        sram_tx: memory@20068000 {
+            reg = <0x20068000 0x0800>;
+        };
+
+        sram_rx: memory@20060000 {
+            reg = <0x20060000 0x0800>;
+        };
+    };
+
+    ipc {
+        ipc0: ipc0 {
+            compatible = "zephyr,ipc-icmsg-me-follower";
+            dcache-alignment = <32>;
+            tx-region = <&sram_tx>;
+            rx-region = <&sram_rx>;
+            mboxes = <&cpuflpr_vevif_tx 20>, <&cpuflpr_vevif_rx 21>;
+            mbox-names = "tx", "rx";
+            status = "okay";
+        };
+    };
+};
+
+&cpuflpr_vevif_tx {
+    status = "okay";
+};
+
+&cpuflpr_vevif_rx {
+    status = "okay";
+};
+
+&i2c30 {
+    compatible = "nordic,nrf-twim";
+    status = "okay";
+
+    lsm6ds3tr_c: lsm6ds3tr-c@6a {
+        compatible = "st,lsm6dsl";
+        reg = <0x6a>;
+        irq-gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>;
+        status = "okay";
+    };
+};
+
+/ {
+    /delete-node/ pmic-i2c;
+};
+
