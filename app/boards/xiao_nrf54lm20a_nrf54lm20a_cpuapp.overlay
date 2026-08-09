@@ -105,7 +105,7 @@ dmic_dev: &pdm20 {
         nau7802: nau7802@2a {
                 compatible = "nuvoton,nau7802_loadcell";
                 reg = <0x2a>;
-                drdy-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
+                drdy-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
                 conversions-per-second = <20>;
                 gain = <128>;
         };
@@ -119,8 +119,8 @@ dmic_dev: &pdm20 {
         buttons {
                 compatible = "gpio-keys";
                 touch_pad: touch_pad {
-                        gpios = <&gpio1 9 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
-                        label = "Touch Pad D7";
+                        gpios = <&gpio1 7 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+                        label = "Touch Pad D5";
                 };
         };
 };
