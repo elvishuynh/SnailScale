@@ -29,6 +29,7 @@ target_sources(app PRIVATE
     src/motion_ipc.c
     src/fault_handler.c
     src/display_manager.c
+    src/periph_power.c
 )
 
 target_include_directories(app PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include")
