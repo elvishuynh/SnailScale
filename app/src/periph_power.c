@@ -14,7 +14,9 @@ static const struct gpio_dt_spec matrix_sclk_gpio = GPIO_DT_SPEC_GET(DT_PATH(zep
 void periph_3v3_off(void)
 {
 	/* suspend i2c bus */
+#ifdef CONFIG_PM_DEVICE
 	pm_device_action_run(i2c_dev, PM_DEVICE_ACTION_SUSPEND);
+#endif
 
 	/* isolate signal pins */
 	gpio_pin_configure_dt(&drdy_gpio, GPIO_DISCONNECTED);
@@ -35,7 +37,9 @@ void periph_3v3_on(void)
 	k_msleep(15);
 
 	/* resume i2c */
+#ifdef CONFIG_PM_DEVICE
 	pm_device_action_run(i2c_dev, PM_DEVICE_ACTION_RESUME);
+#endif
 
 	/* restore inputs */
 	gpio_pin_configure_dt(&drdy_gpio, GPIO_INPUT);
@@ -48,3 +52,12 @@ void periph_3v3_on(void)
 	gpio_pin_configure_dt(&matrix_din_gpio, GPIO_OUTPUT_LOW);
 	gpio_pin_configure_dt(&matrix_sclk_gpio, GPIO_OUTPUT_LOW);
 }
+
+static int periph_power_sys_init(void)
+{
+	/* turn on power before sensor drivers init */
+	periph_3v3_on();
+	return 0;
+}
+
+SYS_INIT(periph_power_sys_init, POST_KERNEL, 10);
