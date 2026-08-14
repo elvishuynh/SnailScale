@@ -30,7 +30,21 @@ void periph_3v3_off(void)
 
 void periph_3v3_on(void)
 {
-	/* apply power */
+	/* Soft-start the MOSFET to prevent inrush current from triggering BOR.
+	 * The AS2305 is active-low. We pulse it on with increasing duty cycle
+	 * over ~10ms to slowly charge downstream decoupling capacitors.
+	 */
+	gpio_pin_configure_dt(&powerswitch_gpio, GPIO_OUTPUT_INACTIVE);
+
+	for (int i = 0; i <= 100; i++) {
+		gpio_pin_set_dt(&powerswitch_gpio, 1); /* Active (ON) */
+		k_busy_wait(i);
+
+		gpio_pin_set_dt(&powerswitch_gpio, 0); /* Inactive (OFF) */
+		k_busy_wait(100 - i);
+	}
+
+	/* apply solid power */
 	gpio_pin_configure_dt(&powerswitch_gpio, GPIO_OUTPUT_ACTIVE);
 
 	/* settle time */
