@@ -48,6 +48,10 @@ static double cal_raw_100g = 1000000.0;
 static bool piecewise_cal_active = false;
 
 static const struct device *nau_dev_ptr;
+static struct sensor_trigger drdy_trig = {
+	.type = SENSOR_TRIG_DATA_READY,
+	.chan = (enum sensor_channel)SENSOR_CHAN_FORCE,
+};
 
 static double last_displayed_weight = 0.0;
 static double ema_weight = 0.0;
@@ -379,12 +383,7 @@ int scale_logic_init(void)
 	scale_tare();
 
 	// register DRDY trigger now that the sensor is fully online
-	struct sensor_trigger trig = {
-		.type = SENSOR_TRIG_DATA_READY,
-		.chan = (enum sensor_channel)SENSOR_CHAN_FORCE,
-	};
-
-	if (sensor_trigger_set(nau_dev_ptr, &trig, nau7802_drdy_handler)) {
+	if (sensor_trigger_set(nau_dev_ptr, &drdy_trig, nau7802_drdy_handler)) {
 		LOG_ERR("Failed to set NAU7802 trigger");
 		return -1;
 	}
@@ -511,33 +510,35 @@ static void scale_tare_thread(void)
 		if (chan == &tare_request_chan) {
 			LOG_INF("Tare requested via zbus");
 
-			struct sensor_trigger trig = {
-				.type = SENSOR_TRIG_DATA_READY,
-				.chan = (enum sensor_channel)SENSOR_CHAN_FORCE,
-			};
+			if (nau_dev_ptr == NULL || !device_is_ready(nau_dev_ptr)) {
+				LOG_WRN("Scale not ready, ignoring tare request");
+				continue;
+			}
 
-			sensor_trigger_set(nau_dev_ptr, &trig, NULL);
+			sensor_trigger_set(nau_dev_ptr, &drdy_trig, NULL);
 			scale_tare();
-			sensor_trigger_set(nau_dev_ptr, &trig, nau7802_drdy_handler);
+			sensor_trigger_set(nau_dev_ptr, &drdy_trig, nau7802_drdy_handler);
 		} else if (chan == &wake_request_chan) {
 			LOG_INF("Wake requested via zbus");
 			display_manager_power_on();
 			display_manager_register_activity();
 			scale_logic_register_activity();
 #ifdef CONFIG_PM_DEVICE
-			pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_RESUME);
+			if (nau_dev_ptr != NULL && device_is_ready(nau_dev_ptr)) {
+				pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_RESUME);
+			}
 #endif
 		} else if (chan == &calibrate_request_chan) {
 			LOG_INF("Calibration requested via zbus");
 
-			struct sensor_trigger trig = {
-				.type = SENSOR_TRIG_DATA_READY,
-				.chan = (enum sensor_channel)SENSOR_CHAN_FORCE,
-			};
+			if (nau_dev_ptr == NULL || !device_is_ready(nau_dev_ptr)) {
+				LOG_WRN("Scale not ready, ignoring calibration request");
+				continue;
+			}
 
-			sensor_trigger_set(nau_dev_ptr, &trig, NULL);
+			sensor_trigger_set(nau_dev_ptr, &drdy_trig, NULL);
 			scale_calibrate();
-			sensor_trigger_set(nau_dev_ptr, &trig, nau7802_drdy_handler);
+			sensor_trigger_set(nau_dev_ptr, &drdy_trig, nau7802_drdy_handler);
 		}
 	}
 }
