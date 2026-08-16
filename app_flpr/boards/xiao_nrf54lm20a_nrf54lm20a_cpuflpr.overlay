@@ -8,7 +8,7 @@
         /delete-node/ memory@20067c00;
         cpuflpr_sram: memory@20070000 {
             compatible = "mmio-sram";
-            reg = <0x20070000 0x10000>;
+            reg = <0x20070000 64512>;
         };
     };
 

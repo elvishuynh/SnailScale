@@ -1,5 +1,9 @@
 VERSION_MAJOR = 0
 VERSION_MINOR = 4
-PATCHLEVEL = 1
-VERSION_TWEAK = 3
+PATCHLEVEL = 11
+VERSION_TWEAK = 0
 EXTRAVERSION =
+
+// FLPR Optimization
+// flpr runs a full zephyr build from sram requiring 64kb in both overlay files
+// this needs to be revisited for better power management pending nrfxlib support
