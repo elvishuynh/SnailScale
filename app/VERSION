@@ -5,5 +5,6 @@ VERSION_TWEAK = 0
 EXTRAVERSION =
 
 // FLPR Optimization
+// see: FLPR Bare Metal in notebook
 // flpr runs a full zephyr build from sram requiring 64kb in both overlay files
 // this needs to be revisited for better power management pending nrfxlib support
