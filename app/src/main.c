@@ -40,11 +40,9 @@ int main(void)
 	}
 
 	// ipc must be up before scale logic starts
-	// flpr is already booted
 	if (motion_ipc_init() != 0) {
 		system_fault_handler("Motion IPC init failed");
 	}
-
 
 	if (scale_logic_init() != 0) {
 		system_fault_handler("Scale logic init failed");
