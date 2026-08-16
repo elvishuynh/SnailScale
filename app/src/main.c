@@ -14,11 +14,12 @@
 #include "display_manager.h"
 
 #include <zephyr/dfu/mcuboot.h>
+#include <app_version.h>
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 int main(void)
 {
-	LOG_INF("PT18 matrix scroll demo started");
+	LOG_INF("SnailScale firmware v%s started", APP_VERSION_EXTENDED_STRING);
 
 	if (settings_subsys_init() != 0) {
 		system_fault_handler("Settings subsys init failed");
