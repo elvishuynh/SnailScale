@@ -19,6 +19,7 @@
 
 #include "motion_ipc.h"
 #include "symbols.h"
+#include "touch_sensor.h"
 
 #define SCALE_FILTER_SETTING 2
 
@@ -77,6 +78,9 @@ void scale_logic_register_activity(void)
 
 static void scale_tare(void)
 {
+	// lock touch sensor during tare
+	touch_sensor_lockout(35000);
+
 	display_manager_register_activity();
 	scale_logic_register_activity();
 	display_manager_clear();
@@ -126,6 +130,9 @@ static void scale_tare(void)
 
 	first_sample = true;
 	last_str[0] = '\0';
+
+	// post tare settle lockout
+	touch_sensor_lockout(500);
 }
 
 static bool wait_for_weight(const char *weight_str, double baseline_raw, double threshold_jump, int polarity)
@@ -220,6 +227,9 @@ static double sample_and_flash(const char *weight_str)
 
 static void scale_calibrate(void)
 {
+	// lock touch sensor during cal
+	touch_sensor_lockout(60000);
+
 	display_manager_register_activity();
 	scale_logic_register_activity();
 	display_manager_clear();
@@ -280,6 +290,9 @@ static void scale_calibrate(void)
 
 	first_sample = true;
 	last_str[0] = '\0';
+
+	// post cal settle lockout
+	touch_sensor_lockout(500);
 	return;
 
 dnf:
@@ -287,6 +300,9 @@ dnf:
 	k_msleep(1000);
 	first_sample = true;
 	last_str[0] = '\0';
+
+	// post cal settle lockout
+	touch_sensor_lockout(500);
 }
 
 static double calculate_absolute_weight(double raw)

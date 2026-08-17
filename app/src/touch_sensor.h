@@ -1,11 +1,13 @@
 #ifndef TOUCH_SENSOR_H
 #define TOUCH_SENSOR_H
 
-/**
- * Initializes the touch sensor
- * Callback executed sensor held for 2 seconds
- * return 0 on success, negative error code otherwise
- */
+#include <stdint.h>
+
+// initialize touch sensor
 int touch_sensor_init(void);
 
+// lockout touch input for duration
+void touch_sensor_lockout(uint32_t duration_ms);
+
 #endif
+
