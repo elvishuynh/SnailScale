@@ -134,65 +134,66 @@ static void imu_trigger_handler(const struct device *dev, const struct sensor_tr
         return;
     }
 
-    uint8_t status1, status2;
-    i2c_reg_read_byte_dt(&imu_i2c, 0x3A, &status1);
-    i2c_reg_read_byte_dt(&imu_i2c, 0x3B, &status2);
-    
-    uint16_t num_words = status1 | ((status2 & 0x07) << 8);
-    
-    if (num_words < FIFO_WATERMARK) {
-        LOG_WRN("Interrupt fired but FIFO only has %u words", num_words);
-        return;
-    }
-
-    // burst read from FIFO_DATA_OUT_L (0x3E)
-    int ret = i2c_burst_read_dt(&imu_i2c, 0x3E, (uint8_t*)fifo_buf, FIFO_WATERMARK * 2);
-    if (ret != 0) {
-        LOG_ERR("FIFO burst read failed: %d", ret);
-        return;
-    }
-
-    size_t num_samples = FIFO_WATERMARK / 3;
-
-    if (awaiting_stillness) {
-        // calculate per batch variance to check if scale is still
-        int64_t sx = 0, sy = 0, sz = 0;
-        for (size_t i = 0; i < num_samples; i++) {
-            sx += fifo_buf[i * 3 + 0];
-            sy += fifo_buf[i * 3 + 1];
-            sz += fifo_buf[i * 3 + 2];
+    while (1) {
+        uint8_t status1, status2;
+        i2c_reg_read_byte_dt(&imu_i2c, 0x3A, &status1);
+        i2c_reg_read_byte_dt(&imu_i2c, 0x3B, &status2);
+        
+        uint16_t num_words = status1 | ((status2 & 0x07) << 8);
+        
+        if (num_words < FIFO_WATERMARK) {
+            break;
         }
-        int32_t mx = (int32_t)(sx / num_samples);
-        int32_t my = (int32_t)(sy / num_samples);
-        int32_t mz = (int32_t)(sz / num_samples);
 
-        int64_t var = 0;
-        for (size_t i = 0; i < num_samples; i++) {
-            int32_t dx = fifo_buf[i * 3 + 0] - mx;
-            int32_t dy = fifo_buf[i * 3 + 1] - my;
-            int32_t dz = fifo_buf[i * 3 + 2] - mz;
-            var += (int64_t)(dx * dx) + (int64_t)(dy * dy) + (int64_t)(dz * dz);
+        // burst read from fifo data out
+        int ret = i2c_burst_read_dt(&imu_i2c, 0x3E, (uint8_t*)fifo_buf, FIFO_WATERMARK * 2);
+        if (ret != 0) {
+            LOG_ERR("FIFO burst read failed: %d", ret);
+            return;
         }
-        var /= num_samples;
 
-        if (var < STILLNESS_THRESHOLD) {
-            still_count++;
-            LOG_INF("Still read %d/%d (var: %lld)", still_count, STILLNESS_REQUIRED_READS, var);
-            if (still_count >= STILLNESS_REQUIRED_READS) {
-                LOG_INF("Stillness confirmed");
-                awaiting_stillness = false;
+        size_t num_samples = FIFO_WATERMARK / 3;
+
+        if (awaiting_stillness) {
+            // calculate per batch variance to check if scale is still
+            int64_t sx = 0, sy = 0, sz = 0;
+            for (size_t i = 0; i < num_samples; i++) {
+                sx += fifo_buf[i * 3 + 0];
+                sy += fifo_buf[i * 3 + 1];
+                sz += fifo_buf[i * 3 + 2];
+            }
+            int32_t mx = (int32_t)(sx / num_samples);
+            int32_t my = (int32_t)(sy / num_samples);
+            int32_t mz = (int32_t)(sz / num_samples);
+
+            int64_t var = 0;
+            for (size_t i = 0; i < num_samples; i++) {
+                int32_t dx = fifo_buf[i * 3 + 0] - mx;
+                int32_t dy = fifo_buf[i * 3 + 1] - my;
+                int32_t dz = fifo_buf[i * 3 + 2] - mz;
+                var += (int64_t)(dx * dx) + (int64_t)(dy * dy) + (int64_t)(dz * dz);
+            }
+            var /= num_samples;
+
+            if (var < STILLNESS_THRESHOLD) {
+                still_count++;
+                LOG_INF("Still read %d/%d (var: %lld)", still_count, STILLNESS_REQUIRED_READS, var);
+                if (still_count >= STILLNESS_REQUIRED_READS) {
+                    LOG_INF("Stillness confirmed");
+                    awaiting_stillness = false;
+                    still_count = 0;
+                    uint8_t msg = STILLNESS_CONFIRMED;
+                    ipc_service_send(&ep, &msg, sizeof(msg));
+                }
+            } else {
+                // reset if movement detected again
                 still_count = 0;
-                uint8_t msg = STILLNESS_CONFIRMED;
-                ipc_service_send(&ep, &msg, sizeof(msg));
             }
         } else {
-            // reset if movement detected again
-            still_count = 0;
-        }
-    } else {
-        // normal shake detection
-        if (detect_shake_gesture(fifo_buf, num_samples)) {
-            k_sem_give(&shake_sem);
+            // normal shake detection
+            if (detect_shake_gesture(fifo_buf, num_samples)) {
+                k_sem_give(&shake_sem);
+            }
         }
     }
 }

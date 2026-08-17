@@ -46,4 +46,5 @@ static int flpr_boot(void) {
     
     return 0;
 }
-SYS_INIT(flpr_boot, POST_KERNEL, 48);
+// boot flpr after pmic regulators initialize
+SYS_INIT(flpr_boot, POST_KERNEL, 90);

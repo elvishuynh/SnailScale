@@ -83,6 +83,8 @@
 					regulator-min-microvolt = <3300000>;
 					regulator-max-microvolt = <3300000>;
 					regulator-initial-mode = <NPM13XX_LDSW_MODE_LDO>;
+					regulator-boot-on;
+					regulator-always-on;
 				};
 			};
 

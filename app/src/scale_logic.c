@@ -107,6 +107,8 @@ static void scale_tare(void)
 		}
 		
 		iterations++;
+		display_manager_register_activity();
+		scale_logic_register_activity();
 	}
 
 	if (iterations >= 120) {
