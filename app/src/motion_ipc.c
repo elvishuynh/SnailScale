@@ -13,6 +13,8 @@
 #define SLEEP_REQUEST 0x04
 #define WAKE_REQUEST 0x05
 
+extern int flpr_boot(void);
+
 LOG_MODULE_REGISTER(motion_ipc, CONFIG_LOG_DEFAULT_LEVEL);
 
 
@@ -58,6 +60,8 @@ static struct ipc_ept_cfg ep_cfg = {
 
 int motion_ipc_init(void)
 {
+    // boot flpr first so its VEVIF peripheral is accessible, preventing bus faults
+    flpr_boot();
 
     if (gpio_is_ready_dt(&led)) {
         gpio_pin_configure_dt(&led, GPIO_OUTPUT_INACTIVE);

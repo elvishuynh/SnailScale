@@ -56,6 +56,11 @@ dmic_dev: &pdm20 {
         status = "okay";
 };
 
+&imu_vdd {
+        regulator-boot-on;
+        regulator-always-on;
+};
+
 &cpuapp_rram {
     reg = <0x0 DT_SIZE_K(2036)>;
 };

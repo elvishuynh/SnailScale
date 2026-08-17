@@ -19,4 +19,4 @@ ExternalZephyrProject_Add(
 )
 
 # compile app_flpr before main app
-add_dependencies(app app_flpr)
+add_dependencies(${DEFAULT_IMAGE} app_flpr)

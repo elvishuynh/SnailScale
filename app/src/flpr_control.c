@@ -32,7 +32,7 @@ static int flpr_early_ram_init(void) {
 }
 SYS_INIT(flpr_early_ram_init, PRE_KERNEL_1, 0);
 
-static int flpr_boot(void) {
+int flpr_boot(void) {
     memcpy((void *)FLPR_SRAM_GLOBAL_ADDR, flpr_firmware, FLPR_FIRMWARE_SIZE);
     
     // flush firmware payload to sram without config dcache guard
@@ -46,5 +46,3 @@ static int flpr_boot(void) {
     
     return 0;
 }
-// boot flpr after pmic regulators initialize
-SYS_INIT(flpr_boot, POST_KERNEL, 90);
