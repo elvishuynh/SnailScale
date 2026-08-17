@@ -242,6 +242,22 @@ int main(void)
 {
     const struct device *ipc = DEVICE_DT_GET(DT_NODELABEL(ipc0));
 
+    int ret = ipc_service_open_instance(ipc);
+    if (ret < 0 && ret != -EALREADY) {
+        LOG_ERR("ipc open failed %d", ret);
+        return ret;
+    }
+
+    ret = ipc_service_register_endpoint(ipc, &ep, &ep_cfg);
+    if (ret < 0) {
+        LOG_ERR("ep register failed %d", ret);
+        return ret;
+    }
+
+    // wait for cpuapp to bind
+    k_sem_take(&ep_bound, K_FOREVER);
+    LOG_INF("tare endpoint bound");
+
     if (!i2c_is_ready_dt(&imu_i2c)) {
         LOG_ERR("imu I2C bus not ready");
     }
@@ -276,22 +292,6 @@ int main(void)
             LOG_INF("imu FIFO activated");
         }
     }
-
-    int ret = ipc_service_open_instance(ipc);
-    if (ret < 0 && ret != -EALREADY) {
-        LOG_ERR("ipc open failed %d", ret);
-        return ret;
-    }
-
-    ret = ipc_service_register_endpoint(ipc, &ep, &ep_cfg);
-    if (ret < 0) {
-        LOG_ERR("ep register failed %d", ret);
-        return ret;
-    }
-
-    // wait for cpuapp to bind
-    k_sem_take(&ep_bound, K_FOREVER);
-    LOG_INF("tare endpoint bound");
 
     while (1) {
         k_sem_take(&shake_sem, K_FOREVER);
