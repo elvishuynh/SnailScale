@@ -20,9 +20,8 @@
 
         zephyr,user {
                 io-channels = <&adc 0>, <&adc 1>, <&adc 2>, <&adc 3>, <&adc 4>, <&adc 5>, <&adc 6>, <&adc 7>;
-                powerswitch-gpios = <&gpio1 8 GPIO_ACTIVE_LOW>;
+                powerswitch-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
                 drdy-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
-                touchout-gpios = <&gpio1 7 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
                 matrixdin-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
                 matrixsclk-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
         };
@@ -56,10 +55,7 @@ dmic_dev: &pdm20 {
         status = "okay";
 };
 
-&imu_vdd {
-        regulator-boot-on;
-        regulator-always-on;
-};
+
 
 &cpuapp_rram {
     reg = <0x0 DT_SIZE_K(2036)>;
@@ -92,6 +88,7 @@ dmic_dev: &pdm20 {
                 group1 {
                         psels = <NRF_PSEL(TWIM_SCL, 1, 30)>,
                                 <NRF_PSEL(TWIM_SDA, 1, 29)>;
+                        bias-pull-up;
                 };
         };
 
@@ -140,5 +137,13 @@ dmic_dev: &pdm20 {
 };
 
 &lsm6ds3tr_c {
+        status = "disabled";
+};
+
+&spi23 {
+        status = "disabled";
+};
+
+&uart21 {
         status = "disabled";
 };

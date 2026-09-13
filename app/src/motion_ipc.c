@@ -3,6 +3,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/ipc/ipc_service.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/regulator.h>
 #include <zephyr/logging/log.h>
 
 #include <zephyr/zbus/zbus.h>
@@ -60,6 +61,13 @@ static struct ipc_ept_cfg ep_cfg = {
 
 int motion_ipc_init(void)
 {
+    const struct device *imu_vdd = DEVICE_DT_GET(DT_NODELABEL(imu_vdd));
+    if (device_is_ready(imu_vdd)) {
+        regulator_enable(imu_vdd);
+        // give imu time to power up
+        k_msleep(35);
+    }
+
     // boot flpr first so its VEVIF peripheral is accessible, preventing bus faults
     flpr_boot();
 
