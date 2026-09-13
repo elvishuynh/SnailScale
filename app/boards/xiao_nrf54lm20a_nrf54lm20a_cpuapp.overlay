@@ -24,6 +24,7 @@
                 drdy-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
                 matrixdin-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
                 matrixsclk-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
+                touchsda-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
         };
 
         soc {
@@ -126,7 +127,7 @@ dmic_dev: &pdm20 {
         buttons {
                 compatible = "gpio-keys";
                 touch_pad: touch_pad {
-                        gpios = <&gpio1 7 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+                        gpios = <&gpio1 7 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
                         label = "Touch Pad D5";
                 };
         };
