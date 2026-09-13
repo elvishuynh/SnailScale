@@ -20,6 +20,7 @@
 #include "motion_ipc.h"
 #include "symbols.h"
 #include "touch_sensor.h"
+#include "periph_power.h"
 
 #define SCALE_FILTER_SETTING 2
 
@@ -59,16 +60,22 @@ static double ema_weight = 0.0;
 static bool first_sample = true;
 static char last_str[16] = {0};
 
+static bool is_sleeping = false;
 static struct k_work_delayable sleep_work;
 
 static void sleep_work_handler(struct k_work *work)
 {
 	LOG_INF("Inactivity timeout, entering sleep mode");
+	is_sleeping = true;
 	motion_ipc_send_sleep_request();
 	display_manager_power_off();
 #ifdef CONFIG_PM_DEVICE
-	pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_SUSPEND);
+	if (nau_dev_ptr != NULL && device_is_ready(nau_dev_ptr)) {
+		sensor_trigger_set(nau_dev_ptr, &drdy_trig, NULL);
+		pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_SUSPEND);
+	}
 #endif
+	periph_3v3_off();
 }
 
 void scale_logic_register_activity(void)
@@ -520,6 +527,27 @@ ZBUS_CHAN_DEFINE(calibrate_request_chan,
 		 ZBUS_MSG_INIT(0)
 );
 
+static void scale_wake(void)
+{
+	if (!is_sleeping) {
+		return;
+	}
+	LOG_INF("Waking scale peripherals");
+	periph_3v3_on();
+	display_manager_power_on();
+	display_manager_register_activity();
+	scale_logic_register_activity();
+#ifdef CONFIG_PM_DEVICE
+	if (nau_dev_ptr != NULL && device_is_ready(nau_dev_ptr)) {
+		pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_RESUME);
+		sensor_trigger_set(nau_dev_ptr, &drdy_trig, nau7802_drdy_handler);
+	}
+#endif
+	first_sample = true;
+	last_str[0] = '\0';
+	is_sleeping = false;
+}
+
 static void scale_tare_thread(void)
 {
 	const struct zbus_channel *chan;
@@ -527,6 +555,10 @@ static void scale_tare_thread(void)
 	while (!zbus_sub_wait(&scale_tare_sub, &chan, K_FOREVER)) {
 		if (chan == &tare_request_chan) {
 			LOG_INF("Tare requested via zbus");
+
+			if (is_sleeping) {
+				scale_wake();
+			}
 
 			if (nau_dev_ptr == NULL || !device_is_ready(nau_dev_ptr)) {
 				LOG_WRN("Scale not ready, ignoring tare request");
@@ -538,16 +570,13 @@ static void scale_tare_thread(void)
 			sensor_trigger_set(nau_dev_ptr, &drdy_trig, nau7802_drdy_handler);
 		} else if (chan == &wake_request_chan) {
 			LOG_INF("Wake requested via zbus");
-			display_manager_power_on();
-			display_manager_register_activity();
-			scale_logic_register_activity();
-#ifdef CONFIG_PM_DEVICE
-			if (nau_dev_ptr != NULL && device_is_ready(nau_dev_ptr)) {
-				pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_RESUME);
-			}
-#endif
+			scale_wake();
 		} else if (chan == &calibrate_request_chan) {
 			LOG_INF("Calibration requested via zbus");
+
+			if (is_sleeping) {
+				scale_wake();
+			}
 
 			if (nau_dev_ptr == NULL || !device_is_ready(nau_dev_ptr)) {
 				LOG_WRN("Scale not ready, ignoring calibration request");

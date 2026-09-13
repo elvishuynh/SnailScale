@@ -29,6 +29,8 @@ void periph_3v3_off(void)
 
 	/* cut power */
 	gpio_pin_configure_dt(&powerswitch_gpio, GPIO_OUTPUT_INACTIVE);
+	gpio_pin_set_dt(&powerswitch_gpio, 0);
+	LOG_INF("Peripheral power OFF");
 }
 
 void periph_3v3_on(void)

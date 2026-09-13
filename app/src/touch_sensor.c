@@ -185,6 +185,9 @@ static void debounce_work_handler(struct k_work *work)
 		press_start_time = now;
 		calibrate_fired = false;
 		LOG_INF("touch detected (debounced)");
+		// notify system to wake up
+		struct wake_request_msg wake_msg;
+		zbus_chan_pub(&wake_request_chan, &wake_msg, K_NO_WAIT);
 		// schedule long press timer
 		k_work_schedule(&long_press_work, K_MSEC(LONG_PRESS_HOLD_MS));
 	} else if (val == 0 && is_touched) {
