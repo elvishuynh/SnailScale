@@ -44,7 +44,7 @@ void periph_3v3_on(void)
 	gpio_pin_set_dt(&powerswitch_gpio, 1);
 
 	/* Settle time for TPS22917 rail with CT capacitor */
-	k_msleep(15);
+	k_msleep(50);
 	LOG_INF("Peripheral power ON: pin %d", powerswitch_gpio.pin);
 
 	/* resume i2c if already initialized (for runtime sleep/wake cycles) */
