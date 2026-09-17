@@ -16,7 +16,7 @@ LOG_MODULE_REGISTER(touch_sensor, CONFIG_LOG_DEFAULT_LEVEL);
 
 // tap duration limits
 #define MIN_TAP_DURATION_MS 50
-#define MAX_TAP_DURATION_MS 600
+#define MAX_TAP_DURATION_MS 1000
 
 // multi tap timing
 #define MULTI_TAP_WINDOW_MS 450
@@ -26,11 +26,14 @@ LOG_MODULE_REGISTER(touch_sensor, CONFIG_LOG_DEFAULT_LEVEL);
 #define IQS231B_I2C_ADDR 0x44
 #define IQS231B_REG_COMMANDS 0x04
 #define IQS231B_REG_OTP_BANK_2 0x06
+#define IQS231B_REG_QUICK_RELEASE 0x08
 #define IQS231B_REG_TOUCH_THRESHOLD 0x0A
 #define IQS231B_REG_PROX_THRESHOLD 0x0B
 #define IQS231B_CMD_STANDALONE 0x01
+#define IQS231B_OTP_BANK2_VAL 0x33
+#define IQS231B_QUICK_RELEASE_VAL 0x22
 #define IQS231B_TOUCH_THRESHOLD_VAL 0x28
-#define IQS231B_PROX_THRESHOLD_VAL 0x08
+#define IQS231B_PROX_THRESHOLD_VAL 0x02
 
 static const struct gpio_dt_spec touch_pad = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 static const struct gpio_dt_spec touch_sda = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), touchsda_gpios);
@@ -44,11 +47,18 @@ static void touch_pad_isr(const struct device *dev, struct gpio_callback *cb, ui
 static bool is_touched = false;
 static int64_t press_start_time = 0;
 static uint8_t tap_count = 0;
+static bool is_locked = false;
 static int64_t lockout_until = 0;
 
-void touch_sensor_lockout(uint32_t duration_ms)
+void touch_sensor_lock(void)
 {
-	lockout_until = k_uptime_get() + duration_ms;
+	is_locked = true;
+}
+
+void touch_sensor_unlock(uint32_t settle_ms)
+{
+	is_locked = false;
+	lockout_until = k_uptime_get() + settle_ms;
 }
 
 // bit bang i2c open drain primitives
@@ -211,7 +221,7 @@ static void iqs_switch_work_handler(struct k_work *work)
 	k_busy_wait(500);
 
 	// set ui to touch with no movement and enable quick release
-	uint8_t bank2_val = (dump[7] & ~0x07) | 0x03 | BIT(2);
+	uint8_t bank2_val = IQS231B_OTP_BANK2_VAL;
 	for (int retry = 0; retry < 3; retry++) {
 		bb_start();
 		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
@@ -251,6 +261,22 @@ static void iqs_switch_work_handler(struct k_work *work)
 				if (bb_write_byte(IQS231B_TOUCH_THRESHOLD_VAL)) {
 					bb_stop();
 					LOG_INF("IQS231B touch threshold set to 0x%02x", IQS231B_TOUCH_THRESHOLD_VAL);
+					break;
+				}
+			}
+		}
+		bb_stop();
+		k_busy_wait(500);
+	}
+
+	// set quick release threshold and beta for clean release
+	for (int retry = 0; retry < 3; retry++) {
+		bb_start();
+		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
+			if (bb_write_byte(IQS231B_REG_QUICK_RELEASE)) {
+				if (bb_write_byte(IQS231B_QUICK_RELEASE_VAL)) {
+					bb_stop();
+					LOG_INF("IQS231B quick release set to 0x%02x", IQS231B_QUICK_RELEASE_VAL);
 					break;
 				}
 			}
@@ -312,21 +338,31 @@ static void debounce_work_handler(struct k_work *work)
 	}
 
 	// ignore events when locked
-	if (now < lockout_until) {
-		is_touched = (val > 0);
+	if (is_locked || now < lockout_until) {
+		if (val == 0) {
+			is_touched = false;
+			press_start_time = 0;
+		}
 		return;
 	}
 
 	if (val > 0 && !is_touched) {
 		is_touched = true;
 		press_start_time = now;
+		// cancel tap timeout while touching
+		k_work_cancel_delayable(&tap_timeout_work);
 		LOG_INF("touch detected (debounced)");
 		// notify system to wake up
 		struct wake_request_msg wake_msg;
 		zbus_chan_pub(&wake_request_chan, &wake_msg, K_NO_WAIT);
 	} else if (val == 0 && is_touched) {
 		is_touched = false;
+		// guard against zero start time
+		if (press_start_time == 0) {
+			return;
+		}
 		int64_t press_duration = now - press_start_time;
+		press_start_time = 0;
 		LOG_INF("touch released (debounced) duration %lld ms", press_duration);
 
 		// validate single tap duration

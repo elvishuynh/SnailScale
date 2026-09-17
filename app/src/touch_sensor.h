@@ -6,8 +6,11 @@
 // initialize touch sensor
 int touch_sensor_init(void);
 
-// lockout touch input for duration
-void touch_sensor_lockout(uint32_t duration_ms);
+// lock touch sensor while busy
+void touch_sensor_lock(void);
+
+// unlock touch sensor with post settle cooldown
+void touch_sensor_unlock(uint32_t settle_ms);
 
 #endif
 

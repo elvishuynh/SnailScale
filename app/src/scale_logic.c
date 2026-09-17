@@ -86,7 +86,7 @@ void scale_logic_register_activity(void)
 static void scale_tare(void)
 {
 	// lock touch sensor during tare
-	touch_sensor_lockout(35000);
+	touch_sensor_lock();
 
 	display_manager_register_activity();
 	scale_logic_register_activity();
@@ -96,8 +96,8 @@ static void scale_tare(void)
 
 	int iterations = 0;
 	
-	// loop up to 30 seconds (120 * 250ms)
-	while (iterations < 120) {
+	// loop up to 4 seconds sixteen times 250ms
+	while (iterations < 16) {
 		int frame = iterations % 4;
 		if (frame == 0) {
 			display_manager_write(sym_movement_a, sizeof(sym_movement_a));
@@ -118,8 +118,8 @@ static void scale_tare(void)
 		scale_logic_register_activity();
 	}
 
-	if (iterations >= 120) {
-		LOG_WRN("Stillness timeout after 30s, taring anyway");
+	if (iterations >= 16) {
+		LOG_WRN("Stillness timeout after 4s taring anyway");
 	}
 
 	display_manager_print("---", 0);
@@ -140,8 +140,8 @@ static void scale_tare(void)
 	first_sample = true;
 	last_str[0] = '\0';
 
-	// post tare settle lockout
-	touch_sensor_lockout(500);
+	// post tare settle unlock
+	touch_sensor_unlock(200);
 }
 
 static bool wait_for_weight(const char *weight_str, double baseline_raw, double threshold_jump, int polarity)
@@ -237,7 +237,7 @@ static double sample_and_flash(const char *weight_str)
 static void scale_calibrate(void)
 {
 	// lock touch sensor during cal
-	touch_sensor_lockout(60000);
+	touch_sensor_lock();
 
 	display_manager_register_activity();
 	scale_logic_register_activity();
@@ -300,8 +300,8 @@ static void scale_calibrate(void)
 	first_sample = true;
 	last_str[0] = '\0';
 
-	// post cal settle lockout
-	touch_sensor_lockout(500);
+	// post cal settle unlock
+	touch_sensor_unlock(200);
 	return;
 
 dnf:
@@ -310,8 +310,8 @@ dnf:
 	first_sample = true;
 	last_str[0] = '\0';
 
-	// post cal settle lockout
-	touch_sensor_lockout(500);
+	// post cal settle unlock
+	touch_sensor_unlock(200);
 }
 
 static double calculate_absolute_weight(double raw)
@@ -536,6 +536,8 @@ static void scale_wake(void)
 		return;
 	}
 	LOG_INF("Waking scale peripherals");
+	// wake flpr coprocessor
+	motion_ipc_send_wake_request();
 	periph_3v3_on();
 	display_manager_power_on();
 #ifdef CONFIG_PM_DEVICE

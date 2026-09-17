@@ -110,27 +110,38 @@ static bool detect_shake_gesture(int16_t *buffer, size_t num_samples) {
 
 static K_SEM_DEFINE(shake_sem, 0, 1);
 
+// restore imu fifo mode
+static void restore_fifo_mode(void)
+{
+    // clear wake up and int sources to release int1
+    uint8_t wake_src;
+    uint8_t status_reg;
+    i2c_reg_read_byte_dt(&imu_i2c, 0x1B, &wake_src);
+    i2c_reg_read_byte_dt(&imu_i2c, 0x1E, &status_reg);
+    i2c_reg_read_byte_dt(&imu_i2c, 0x1A, &status_reg);
+
+    // disable wake on int1 and disable slope
+    i2c_reg_write_byte_dt(&imu_i2c, 0x5E, 0x00);
+    i2c_reg_write_byte_dt(&imu_i2c, 0x58, 0x00);
+
+    // flush fifo in bypass mode then restart continuous
+    i2c_reg_write_byte_dt(&imu_i2c, 0x0A, 0x00);
+    i2c_reg_write_byte_dt(&imu_i2c, 0x06, FIFO_WATERMARK);
+    i2c_reg_write_byte_dt(&imu_i2c, 0x0A, 0x0E);
+    i2c_reg_write_byte_dt(&imu_i2c, 0x0D, 0x08);
+
+    is_asleep = false;
+    history_count = 0;
+    history_idx = 0;
+}
+
 static void imu_trigger_handler(const struct device *dev, const struct sensor_trigger *trig) {
     if (is_asleep) {
-        // Read wake-up source to clear interrupt
-        uint8_t wake_src;
-        i2c_reg_read_byte_dt(&imu_i2c, 0x1B, &wake_src); // WAKE_UP_SRC
-        
-        is_asleep = false;
-        
         uint8_t msg = WAKE_REQUEST;
         ipc_service_send(&ep, &msg, sizeof(msg));
         LOG_INF("Motion detected! Sent WAKE_REQUEST to CPUAPP");
         
-        // Restore FIFO mode
-        i2c_reg_write_byte_dt(&imu_i2c, 0x5E, 0x00); // MD1_CFG (Disable wake-up on INT1)
-        i2c_reg_write_byte_dt(&imu_i2c, 0x58, 0x00); // TAP_CFG (Disable interrupts and slope)
-        
-        i2c_reg_write_byte_dt(&imu_i2c, 0x0A, 0x0E); // FIFO_CTRL5 (12.5Hz, Continuous mode)
-        i2c_reg_write_byte_dt(&imu_i2c, 0x0D, 0x08); // INT1_CTRL (Enable FTH on INT1)
-        
-        history_count = 0;
-        history_idx = 0;
+        restore_fifo_mode();
         return;
     }
 
@@ -210,8 +221,16 @@ static void ep_recv_cb(const void *data, size_t len, void *priv) {
 
     if (msg == STILLNESS_REQUEST) {
         LOG_INF("Stillness check requested by cpuapp");
+        if (is_asleep) {
+            restore_fifo_mode();
+        }
         still_count = 0;
         awaiting_stillness = true;
+    } else if (msg == WAKE_REQUEST) {
+        LOG_INF("Wake requested by cpuapp");
+        if (is_asleep) {
+            restore_fifo_mode();
+        }
     } else if (msg == SLEEP_REQUEST) {
         LOG_INF("Sleep requested by cpuapp");
         is_asleep = true;
@@ -282,13 +301,13 @@ int main(void)
         } else {
             LOG_INF("imu trigger configured");
             
-            // reconfigure FIFO manually via I2C for Zephyr default override
-            i2c_reg_write_byte_dt(&imu_i2c, 0x06, FIFO_WATERMARK); // FIFO_CTRL1
-            i2c_reg_write_byte_dt(&imu_i2c, 0x07, 0x00);          // FIFO_CTRL2
-            i2c_reg_write_byte_dt(&imu_i2c, 0x08, 0x01);          // FIFO_CTRL3 (no XL decimation)
-            i2c_reg_write_byte_dt(&imu_i2c, 0x09, 0x00);          // FIFO_CTRL4
-            i2c_reg_write_byte_dt(&imu_i2c, 0x0A, 0x0E);          // FIFO_CTRL5 (12.5Hz, Continuous mode)
-            i2c_reg_write_byte_dt(&imu_i2c, 0x0D, 0x08);          // INT1_CTRL (Enable FTH, disable DRDY)
+            // initialize fifo decimation
+            i2c_reg_write_byte_dt(&imu_i2c, 0x07, 0x00);
+            i2c_reg_write_byte_dt(&imu_i2c, 0x08, 0x01);
+            i2c_reg_write_byte_dt(&imu_i2c, 0x09, 0x00);
+
+            // restore clean fifo mode
+            restore_fifo_mode();
             LOG_INF("imu FIFO activated");
         }
     }

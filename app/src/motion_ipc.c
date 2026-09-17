@@ -127,3 +127,16 @@ int motion_ipc_send_sleep_request(void)
     LOG_INF("Sent SLEEP_REQUEST to FLPR");
     return 0;
 }
+
+// send wake request to flpr
+int motion_ipc_send_wake_request(void)
+{
+    uint8_t msg = WAKE_REQUEST;
+    int ret = ipc_service_send(&ep, &msg, sizeof(msg));
+    if (ret < 0) {
+        LOG_ERR("Failed to send WAKE_REQUEST: %d", ret);
+        return ret;
+    }
+    LOG_INF("Sent WAKE_REQUEST to FLPR");
+    return 0;
+}
