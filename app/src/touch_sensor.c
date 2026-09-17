@@ -15,50 +15,50 @@ LOG_MODULE_REGISTER(touch_sensor, CONFIG_LOG_DEFAULT_LEVEL);
 #define BOOT_BLANKING_MS 1500
 
 // tap duration limits
-#define MIN_TAP_DURATION_MS 20
+#define MIN_TAP_DURATION_MS 100
 #define MAX_TAP_DURATION_MS 1000
 
-// multi tap timing
-#define MULTI_TAP_WINDOW_MS 450
-#define CALIBRATE_TAP_COUNT 5
+// cal mode window
+#define CAL_ARM_WINDOW_MS 2000
 
 // iqs231b registers and commands
 #define IQS231B_I2C_ADDR 0x44
 #define IQS231B_REG_COMMANDS 0x04
 #define IQS231B_REG_OTP_BANK_2 0x06
 #define IQS231B_REG_QUICK_RELEASE 0x08
+#define IQS231B_REG_MOVEMENT 0x09
 #define IQS231B_REG_TOUCH_THRESHOLD 0x0A
 #define IQS231B_REG_PROX_THRESHOLD 0x0B
 #define IQS231B_CMD_STANDALONE 0x01
 
-// DO NOT DISABLE QUICK RELEASE
-// DO NOT CHANGE BIT 2 TO ZERO OR IT WILL BRICK RELEASE DETECTION
-// THIS IS NECESSARY BECAUSE QUICK RELEASE CLEARS LATCHED TOUCHES ON FINGER LIFT
-// 0x07 SETS TOUCH UI IN BITS 1 0 AND ENABLES QUICK RELEASE IN BIT 2
-// WRITING 0x33 HERE WILL BREAK RELEASE BECAUSE BIT 2 IS ZERO IN 0x33
-#define IQS231B_OTP_BANK2_VAL 0x07
+// BIT 7 ONE ENABLES INCREASED DEBOUNCE 12 IN 8 OUT TO FILTER NOISE
+// BIT 2 ZERO ENABLES QUICK RELEASE IN SILICON
+// 0xB3 SETS BASE 200 COUNTS AND FORCES TOUCH UI ON IO2 WITH INCREASED DEBOUNCE
+#define IQS231B_OTP_BANK2_VAL 0xB3
 
 // QUICK RELEASE CONFIGURATION REGISTER 0x08
-// THIS IS NECESSARY BECAUSE BETA 2 AND LUT 2 GIVE 50 COUNTS SLOPE DETECTION
-// DO NOT REMOVE THIS WRITE OR QUICK RELEASE USES UNCALIBRATED SLOPE PROFILE
+// BETA 2 AND LUT 2 GIVE FIFTY COUNTS SLOPE DETECTION ON RELEASE
 #define IQS231B_QUICK_RELEASE_VAL 0x22
 
-// NEVER DISABLE THE PROXIMITY CHANNEL
-// PROXIMITY CANNOT BE DISABLED WITH 0xFF BECAUSE QUICK RELEASE RUNS ON THE PROXIMITY CHANNEL
-// IF YOU DISABLE PROXIMITY QUICK RELEASE WILL NOT WORK AND TOUCH WILL REQUIRE 295 COUNTS
-// DO NOT SET THIS TOO LOW LIKE 2 COUNTS OR NOISE WILL LATCH IT PERMANENTLY
-// 8 COUNTS IS MANDATORY TO GIVE NOISE MARGIN WHILE KEEPING PROXIMITY ALIVE FOR QUICK RELEASE
-#define IQS231B_PROX_THRESHOLD_VAL 0x08
+// MOVEMENT REGISTER 0x09
+// 0x34 SETS TWO SECOND TIMEOUT AND EIGHT COUNTS THRESHOLD
+// CLEARS LATCHED REFERENCE IF NO MOVEMENT DETECTED
+#define IQS231B_MOVEMENT_VAL 0x34
 
-// TOUCH THRESHOLD IS RELATIVE TO PROXIMITY THRESHOLD
-// TOTAL DELTA TO ENTER TOUCH IS PROX 8 PLUS TOUCH 40 EQUALING 48 COUNTS
-// TOUCH STATE TEMPORARILY CANCELS QUICK RELEASE UNTIL FINGER LIFTS BACK INTO PROXIMITY
+// PROXIMITY THRESHOLD REGISTER 0x0B
+// BITS 1 0 SET PROXIMITY COUNTS
+// 0x02 SELECTS EIGHT COUNTS TO PREVENT NOISE LATCH WHILE KEEPING QUICK RELEASE ACTIVE
+#define IQS231B_PROX_THRESHOLD_VAL 0x02
+
+// TOUCH THRESHOLD REGISTER 0x0A
+// DATASHEET FORMULA IS VALUE TIMES FOUR PLUS FOUR COUNTS
+// 0x28 GIVES 164 COUNTS TOTAL DELTA TO PREVENT MIDAIR HOVER TRIGGERS
 #define IQS231B_TOUCH_THRESHOLD_VAL 0x28
 
 static const struct gpio_dt_spec touch_pad = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 static const struct gpio_dt_spec touch_sda = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), touchsda_gpios);
 static struct gpio_callback touch_cb_data;
-static struct k_work_delayable tap_timeout_work;
+static struct k_work_delayable cal_timeout_work;
 static struct k_work_delayable debounce_work;
 static struct k_work_delayable iqs_switch_work;
 static struct k_work_delayable iqs_ready_work;
@@ -66,7 +66,7 @@ static void touch_pad_isr(const struct device *dev, struct gpio_callback *cb, ui
 
 static bool is_touched = false;
 static int64_t press_start_time = 0;
-static uint8_t tap_count = 0;
+static bool cal_armed = false;
 static bool is_locked = false;
 static int64_t lockout_until = 0;
 
@@ -242,7 +242,7 @@ static void iqs_switch_work_handler(struct k_work *work)
 
 	k_busy_wait(500);
 
-	// THIS ENABLES QUICK RELEASE IN HARDWARE AND WILL BREAK RELEASE DETECTION IF MODIFIED
+	// WRITE OTP BANK 2 WITH QUICK RELEASE ENABLED IN BIT 2
 	uint8_t bank2_val = IQS231B_OTP_BANK2_VAL;
 	for (int retry = 0; retry < 3; retry++) {
 		bb_start();
@@ -259,8 +259,7 @@ static void iqs_switch_work_handler(struct k_work *work)
 		k_busy_wait(500);
 	}
 
-	// NEVER DISABLE PROXIMITY HERE
-	// PROXIMITY IS MANDATORY FOR QUICK RELEASE TO FUNCTION
+	// WRITE PROXIMITY THRESHOLD REGISTER 0x0B
 	for (int retry = 0; retry < 3; retry++) {
 		bb_start();
 		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
@@ -276,7 +275,7 @@ static void iqs_switch_work_handler(struct k_work *work)
 		k_busy_wait(500);
 	}
 
-	// set touch threshold higher to prevent midair hover triggers
+	// WRITE TOUCH THRESHOLD REGISTER 0x0A
 	for (int retry = 0; retry < 3; retry++) {
 		bb_start();
 		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
@@ -292,8 +291,7 @@ static void iqs_switch_work_handler(struct k_work *work)
 		k_busy_wait(500);
 	}
 
-	// QUICK RELEASE PARAMETER WRITE
-	// THIS IS REQUIRED TO CONFIGURE BETA FILTER AND 50 COUNTS RELEASE LUT
+	// WRITE QUICK RELEASE PARAMETER REGISTER 0x08
 	for (int retry = 0; retry < 3; retry++) {
 		bb_start();
 		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
@@ -301,6 +299,22 @@ static void iqs_switch_work_handler(struct k_work *work)
 				if (bb_write_byte(IQS231B_QUICK_RELEASE_VAL)) {
 					bb_stop();
 					LOG_INF("IQS231B quick release set to 0x%02x", IQS231B_QUICK_RELEASE_VAL);
+					break;
+				}
+			}
+		}
+		bb_stop();
+		k_busy_wait(500);
+	}
+
+	// WRITE MOVEMENT TIMEOUT REGISTER 0x09 TO UNSTICK LATCHED TOUCHES
+	for (int retry = 0; retry < 3; retry++) {
+		bb_start();
+		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
+			if (bb_write_byte(IQS231B_REG_MOVEMENT)) {
+				if (bb_write_byte(IQS231B_MOVEMENT_VAL)) {
+					bb_stop();
+					LOG_INF("IQS231B movement timeout set to 0x%02x", IQS231B_MOVEMENT_VAL);
 					break;
 				}
 			}
@@ -336,14 +350,11 @@ static void iqs_switch_work_handler(struct k_work *work)
 	k_work_schedule(&iqs_ready_work, K_MSEC(150));
 }
 
-static void tap_timeout_work_handler(struct k_work *work)
+static void cal_timeout_work_handler(struct k_work *work)
 {
-	if (tap_count > 0 && tap_count < CALIBRATE_TAP_COUNT) {
-		LOG_INF("Tap sequence ended with %d taps. Firing tare event.", tap_count);
-		tap_count = 0;
-		display_manager_register_activity();
-		struct tare_request_msg msg;
-		zbus_chan_pub(&tare_request_chan, &msg, K_NO_WAIT);
+	if (cal_armed) {
+		cal_armed = false;
+		LOG_INF("CAL mode arming timed out");
 	}
 }
 
@@ -376,8 +387,6 @@ static void debounce_work_handler(struct k_work *work)
 	if (val > 0 && !is_touched) {
 		is_touched = true;
 		press_start_time = now;
-		// cancel tap timeout while touching
-		k_work_cancel_delayable(&tap_timeout_work);
 		LOG_INF("touch detected (debounced)");
 		// notify system to wake up
 		struct wake_request_msg wake_msg;
@@ -387,10 +396,14 @@ static void debounce_work_handler(struct k_work *work)
 	} else if (val > 0 && is_touched) {
 		// NEVER STOP POLLING WHILE PIN IS LOW OR WORK QUEUE DIES AND LOCKS UP SYSTEM
 		// THIS IS NECESSARY BECAUSE NO EDGE INTERRUPT WILL FIRE WHILE LINE STAYS LOW
-		if (press_start_time > 0 && (now - press_start_time > 5000)) {
-			LOG_WRN("touch held too long");
-			tap_count = 0;
-			k_work_cancel_delayable(&tap_timeout_work);
+		if (press_start_time > 0 && (now - press_start_time > 3000)) {
+			// STUCK HOLD GUARD RESET PRESS STATE AND CLEAR CAL ARMED
+			press_start_time = 0;
+			cal_armed = false;
+			LOG_WRN("touch held too long clearing press state");
+			k_work_reschedule(&debounce_work, K_MSEC(100));
+		} else if (press_start_time == 0) {
+			// STILL HELD AFTER TIMEOUT WAIT QUIETLY FOR RELEASE
 			k_work_reschedule(&debounce_work, K_MSEC(100));
 		} else {
 			k_work_reschedule(&debounce_work, K_MSEC(DEBOUNCE_DELAY_MS));
@@ -399,33 +412,38 @@ static void debounce_work_handler(struct k_work *work)
 		is_touched = false;
 		// guard against zero start time
 		if (press_start_time == 0) {
+			lockout_until = now + 500;
 			return;
 		}
 		int64_t press_duration = now - press_start_time;
 		press_start_time = 0;
 		LOG_INF("touch released (debounced) duration %lld ms", press_duration);
 
-		// validate single tap duration
-		if (press_duration >= MIN_TAP_DURATION_MS && press_duration <= MAX_TAP_DURATION_MS) {
-			tap_count++;
-			LOG_INF("tap %d detected", tap_count);
-
-			if (tap_count >= CALIBRATE_TAP_COUNT) {
-				// five taps reached fire calibration
-				k_work_cancel_delayable(&tap_timeout_work);
-				tap_count = 0;
+		if (press_duration >= MAX_TAP_DURATION_MS) {
+			// hold for at least one second arms cal mode
+			cal_armed = true;
+			k_work_reschedule(&cal_timeout_work, K_MSEC(CAL_ARM_WINDOW_MS));
+			display_manager_register_activity();
+			LOG_INF("Hold >= 1000ms detected CAL mode armed tap once to confirm");
+		} else if (press_duration >= MIN_TAP_DURATION_MS) {
+			if (cal_armed) {
+				// cal armed tap confirmed fire calibration
+				cal_armed = false;
+				k_work_cancel_delayable(&cal_timeout_work);
 				display_manager_register_activity();
-				LOG_INF("Five rapid taps detected. Firing calibrate event.");
+				LOG_INF("CAL confirmation tap detected. Firing calibrate event.");
 				struct calibrate_request_msg msg;
 				zbus_chan_pub(&calibrate_request_chan, &msg, K_NO_WAIT);
 			} else {
-				// schedule timeout to fire tare if no more taps
-				k_work_reschedule(&tap_timeout_work, K_MSEC(MULTI_TAP_WINDOW_MS));
+				// zero delay instant tare on tap release
+				display_manager_register_activity();
+				LOG_INF("Tap detected. Firing tare event.");
+				struct tare_request_msg msg;
+				zbus_chan_pub(&tare_request_chan, &msg, K_NO_WAIT);
 			}
 		} else {
-			// press duration outside tap limits
-			tap_count = 0;
-			k_work_cancel_delayable(&tap_timeout_work);
+			// touch duration below 100ms threshold ignored
+			LOG_INF("Touch duration below 100ms ignored");
 		}
 	}
 }
@@ -449,7 +467,7 @@ int touch_sensor_init(void)
 	}
 
 	k_work_init_delayable(&debounce_work, debounce_work_handler);
-	k_work_init_delayable(&tap_timeout_work, tap_timeout_work_handler);
+	k_work_init_delayable(&cal_timeout_work, cal_timeout_work_handler);
 	k_work_init_delayable(&iqs_switch_work, iqs_switch_work_handler);
 	k_work_init_delayable(&iqs_ready_work, iqs_ready_work_handler);
 

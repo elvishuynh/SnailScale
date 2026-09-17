@@ -32,8 +32,16 @@ Check internal micro resistors on silicon, might be able to get more power savin
 
 [[IQS231B Touch Sensor Interrupt vs Active Debounce Polling]]
 	- IQS231B open-drain active-low output on D6 (P1.08) has slow rising edge via internal pull-up which can fail to trigger GPIOTE edge interrupt on release
-	- Currently using edge-triggered wake + active 30ms timer debounce polling while touched (with 5s stuck-line recovery guard)
+	- Currently using edge-triggered wake + active 30ms timer debounce polling while touched (with 3s stuck-line recovery guard)
 	- Revisit whether an external hardware pull-up resistor, IQS231B OTP Bank 3 configuration, or Zephyr GPIOTE PORT sense configuration can achieve reliable pure interrupt-driven release without timer polling
+
+[[Revisit Touch Sensor Gesture and Threshold Logic]]
+	- Current touch logic implements zero-delay instant tare on release (100ms min tap duration), hold >= 1000ms to arm CAL mode with 2000ms tap confirmation, 3s stuck-line recovery guard with 500ms release lockout, threshold 0x28 (164 counts), and OTP Bank 2 0xB3 (12-in/8-out increased debounce)
+	- Revisit later once final enclosure and electrode geometry are assembled to fine-tune tap thresholds, hold durations, and noise immunity margins
+
+[[Wait for Stillness Tuning]]
+	- Current stillness detection is way too forgiving: FLPR IMU stillness threshold is set to 500,000 variance with only 1 required read (`STILLNESS_REQUIRED_READS 1` in `app_flpr/src/main.c`), and cpuapp tares anyway after 4s timeout
+	- Revisit and tighten the variance threshold and required consecutive reads so slight vibrations, hand tremors, or unstable surfaces do not falsely qualify as still before taring
 
 [[Scale Tare Averaging Phase Optimization]]
 	- Current tare routine takes 10 samples with 100ms sleep (1000ms total averaging) in scale_logic.c
