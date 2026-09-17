@@ -22,8 +22,8 @@
                 io-channels = <&adc 0>, <&adc 1>, <&adc 2>, <&adc 3>, <&adc 4>, <&adc 5>, <&adc 6>, <&adc 7>;
                 powerswitch-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
                 drdy-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
-                matrixdin-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
-                matrixsclk-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
+                matrixdin-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
+                matrixsclk-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
                 touchsda-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
         };
 
@@ -80,8 +80,8 @@ dmic_dev: &pdm20 {
 };
 
 &tm1640 {
-        din-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
-        clk-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
+        din-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
+        clk-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
 };
 
 &pinctrl {

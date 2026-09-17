@@ -57,9 +57,9 @@ void periph_3v3_on(void)
 	/* restore inputs */
 	gpio_pin_configure_dt(&drdy_gpio, GPIO_INPUT);
 
-	/* restore outputs */
-	gpio_pin_configure_dt(&matrix_din_gpio, GPIO_OUTPUT_LOW);
-	gpio_pin_configure_dt(&matrix_sclk_gpio, GPIO_OUTPUT_LOW);
+	/* restore outputs high for tm1640 idle */
+	gpio_pin_configure_dt(&matrix_din_gpio, GPIO_OUTPUT_HIGH);
+	gpio_pin_configure_dt(&matrix_sclk_gpio, GPIO_OUTPUT_HIGH);
 }
 
 static int periph_power_sys_init(void)
@@ -69,5 +69,5 @@ static int periph_power_sys_init(void)
 	return 0;
 }
 
-SYS_INIT(periph_power_sys_init, POST_KERNEL, 41);
+SYS_INIT(periph_power_sys_init, POST_KERNEL, 10);
 
