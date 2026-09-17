@@ -92,34 +92,40 @@ static void scale_tare(void)
 	scale_logic_register_activity();
 	display_manager_clear();
 
-	motion_ipc_send_stillness_request();
+	motion_ipc_send_fast_stillness_request();
 
-	int iterations = 0;
-	
-	// loop up to 4 seconds sixteen times 250ms
-	while (iterations < 16) {
-		int frame = iterations % 4;
-		if (frame == 0) {
-			display_manager_write(sym_movement_a, sizeof(sym_movement_a));
-		} else if (frame == 1) {
-			display_manager_write(sym_movement_b, sizeof(sym_movement_b));
-		} else if (frame == 2) {
-			display_manager_write(sym_movement_c, sizeof(sym_movement_c));
-		} else {
-			display_manager_write(sym_movement_d, sizeof(sym_movement_d));
-		}
-		
-		if (motion_ipc_wait_stillness(250) == 0) {
-			break;
-		}
-		
-		iterations++;
-		display_manager_register_activity();
-		scale_logic_register_activity();
-	}
+	// check if already still
+	bool is_still = (motion_ipc_wait_stillness(40) == 0);
 
-	if (iterations >= 16) {
-		LOG_WRN("Stillness timeout after 4s taring anyway");
+	if (!is_still) {
+		int iterations = 0;
+		
+		// loop up to 4 seconds sixteen times 250ms
+		while (iterations < 16) {
+			int frame = iterations % 4;
+			if (frame == 0) {
+				display_manager_write(sym_movement_a, sizeof(sym_movement_a));
+			} else if (frame == 1) {
+				display_manager_write(sym_movement_b, sizeof(sym_movement_b));
+			} else if (frame == 2) {
+				display_manager_write(sym_movement_c, sizeof(sym_movement_c));
+			} else {
+				display_manager_write(sym_movement_d, sizeof(sym_movement_d));
+			}
+			
+			if (motion_ipc_wait_stillness(250) == 0) {
+				is_still = true;
+				break;
+			}
+			
+			iterations++;
+			display_manager_register_activity();
+			scale_logic_register_activity();
+		}
+
+		if (!is_still) {
+			LOG_WRN("Stillness timeout after 4s taring anyway");
+		}
 	}
 
 	display_manager_print("---", 0);

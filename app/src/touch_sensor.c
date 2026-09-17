@@ -15,7 +15,7 @@ LOG_MODULE_REGISTER(touch_sensor, CONFIG_LOG_DEFAULT_LEVEL);
 #define BOOT_BLANKING_MS 1500
 
 // tap duration limits
-#define MIN_TAP_DURATION_MS 50
+#define MIN_TAP_DURATION_MS 20
 #define MAX_TAP_DURATION_MS 1000
 
 // multi tap timing
@@ -30,10 +30,30 @@ LOG_MODULE_REGISTER(touch_sensor, CONFIG_LOG_DEFAULT_LEVEL);
 #define IQS231B_REG_TOUCH_THRESHOLD 0x0A
 #define IQS231B_REG_PROX_THRESHOLD 0x0B
 #define IQS231B_CMD_STANDALONE 0x01
-#define IQS231B_OTP_BANK2_VAL 0x33
+
+// DO NOT DISABLE QUICK RELEASE
+// DO NOT CHANGE BIT 2 TO ZERO OR IT WILL BRICK RELEASE DETECTION
+// THIS IS NECESSARY BECAUSE QUICK RELEASE CLEARS LATCHED TOUCHES ON FINGER LIFT
+// 0x07 SETS TOUCH UI IN BITS 1 0 AND ENABLES QUICK RELEASE IN BIT 2
+// WRITING 0x33 HERE WILL BREAK RELEASE BECAUSE BIT 2 IS ZERO IN 0x33
+#define IQS231B_OTP_BANK2_VAL 0x07
+
+// QUICK RELEASE CONFIGURATION REGISTER 0x08
+// THIS IS NECESSARY BECAUSE BETA 2 AND LUT 2 GIVE 50 COUNTS SLOPE DETECTION
+// DO NOT REMOVE THIS WRITE OR QUICK RELEASE USES UNCALIBRATED SLOPE PROFILE
 #define IQS231B_QUICK_RELEASE_VAL 0x22
+
+// NEVER DISABLE THE PROXIMITY CHANNEL
+// PROXIMITY CANNOT BE DISABLED WITH 0xFF BECAUSE QUICK RELEASE RUNS ON THE PROXIMITY CHANNEL
+// IF YOU DISABLE PROXIMITY QUICK RELEASE WILL NOT WORK AND TOUCH WILL REQUIRE 295 COUNTS
+// DO NOT SET THIS TOO LOW LIKE 2 COUNTS OR NOISE WILL LATCH IT PERMANENTLY
+// 8 COUNTS IS MANDATORY TO GIVE NOISE MARGIN WHILE KEEPING PROXIMITY ALIVE FOR QUICK RELEASE
+#define IQS231B_PROX_THRESHOLD_VAL 0x08
+
+// TOUCH THRESHOLD IS RELATIVE TO PROXIMITY THRESHOLD
+// TOTAL DELTA TO ENTER TOUCH IS PROX 8 PLUS TOUCH 40 EQUALING 48 COUNTS
+// TOUCH STATE TEMPORARILY CANCELS QUICK RELEASE UNTIL FINGER LIFTS BACK INTO PROXIMITY
 #define IQS231B_TOUCH_THRESHOLD_VAL 0x28
-#define IQS231B_PROX_THRESHOLD_VAL 0x02
 
 static const struct gpio_dt_spec touch_pad = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 static const struct gpio_dt_spec touch_sda = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), touchsda_gpios);
@@ -59,6 +79,8 @@ void touch_sensor_unlock(uint32_t settle_ms)
 {
 	is_locked = false;
 	lockout_until = k_uptime_get() + settle_ms;
+	// schedule check after lockout settles
+	k_work_reschedule(&debounce_work, K_MSEC(settle_ms + 10));
 }
 
 // bit bang i2c open drain primitives
@@ -220,7 +242,7 @@ static void iqs_switch_work_handler(struct k_work *work)
 
 	k_busy_wait(500);
 
-	// set ui to touch with no movement and enable quick release
+	// THIS ENABLES QUICK RELEASE IN HARDWARE AND WILL BREAK RELEASE DETECTION IF MODIFIED
 	uint8_t bank2_val = IQS231B_OTP_BANK2_VAL;
 	for (int retry = 0; retry < 3; retry++) {
 		bb_start();
@@ -237,7 +259,8 @@ static void iqs_switch_work_handler(struct k_work *work)
 		k_busy_wait(500);
 	}
 
-	// set prox threshold within datasheet range
+	// NEVER DISABLE PROXIMITY HERE
+	// PROXIMITY IS MANDATORY FOR QUICK RELEASE TO FUNCTION
 	for (int retry = 0; retry < 3; retry++) {
 		bb_start();
 		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
@@ -269,7 +292,8 @@ static void iqs_switch_work_handler(struct k_work *work)
 		k_busy_wait(500);
 	}
 
-	// set quick release threshold and beta for clean release
+	// QUICK RELEASE PARAMETER WRITE
+	// THIS IS REQUIRED TO CONFIGURE BETA FILTER AND 50 COUNTS RELEASE LUT
 	for (int retry = 0; retry < 3; retry++) {
 		bb_start();
 		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
@@ -342,6 +366,9 @@ static void debounce_work_handler(struct k_work *work)
 		if (val == 0) {
 			is_touched = false;
 			press_start_time = 0;
+		} else {
+			// keep polling until released or unlocked
+			k_work_reschedule(&debounce_work, K_MSEC(DEBOUNCE_DELAY_MS));
 		}
 		return;
 	}
@@ -355,6 +382,19 @@ static void debounce_work_handler(struct k_work *work)
 		// notify system to wake up
 		struct wake_request_msg wake_msg;
 		zbus_chan_pub(&wake_request_chan, &wake_msg, K_NO_WAIT);
+		// keep polling while touched to catch release
+		k_work_reschedule(&debounce_work, K_MSEC(DEBOUNCE_DELAY_MS));
+	} else if (val > 0 && is_touched) {
+		// NEVER STOP POLLING WHILE PIN IS LOW OR WORK QUEUE DIES AND LOCKS UP SYSTEM
+		// THIS IS NECESSARY BECAUSE NO EDGE INTERRUPT WILL FIRE WHILE LINE STAYS LOW
+		if (press_start_time > 0 && (now - press_start_time > 5000)) {
+			LOG_WRN("touch held too long");
+			tap_count = 0;
+			k_work_cancel_delayable(&tap_timeout_work);
+			k_work_reschedule(&debounce_work, K_MSEC(100));
+		} else {
+			k_work_reschedule(&debounce_work, K_MSEC(DEBOUNCE_DELAY_MS));
+		}
 	} else if (val == 0 && is_touched) {
 		is_touched = false;
 		// guard against zero start time

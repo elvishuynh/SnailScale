@@ -11,6 +11,7 @@ LOG_MODULE_REGISTER(flpr_main, LOG_LEVEL_INF);
 #define STILLNESS_CONFIRMED 0x03
 #define SLEEP_REQUEST 0x04
 #define WAKE_REQUEST 0x05
+#define FAST_STILLNESS_REQUEST 0x06
 
 static const struct i2c_dt_spec imu_i2c = I2C_DT_SPEC_GET(DT_NODELABEL(lsm6ds3tr_c));
 
@@ -35,6 +36,8 @@ static size_t history_count = 0;
 
 // stillness detection state
 static volatile bool awaiting_stillness;
+static volatile bool is_currently_still;
+static int64_t last_motion_time;
 static volatile bool is_asleep = false;
 static int still_count;
 static struct ipc_ept ep;
@@ -133,6 +136,8 @@ static void restore_fifo_mode(void)
     is_asleep = false;
     history_count = 0;
     history_idx = 0;
+    is_currently_still = false;
+    last_motion_time = k_uptime_get();
 }
 
 static void imu_trigger_handler(const struct device *dev, const struct sensor_trigger *trig) {
@@ -165,27 +170,34 @@ static void imu_trigger_handler(const struct device *dev, const struct sensor_tr
 
         size_t num_samples = FIFO_WATERMARK / 3;
 
+        // calculate batch variance
+        int64_t sx = 0, sy = 0, sz = 0;
+        for (size_t i = 0; i < num_samples; i++) {
+            sx += fifo_buf[i * 3 + 0];
+            sy += fifo_buf[i * 3 + 1];
+            sz += fifo_buf[i * 3 + 2];
+        }
+        int32_t mx = (int32_t)(sx / num_samples);
+        int32_t my = (int32_t)(sy / num_samples);
+        int32_t mz = (int32_t)(sz / num_samples);
+
+        int64_t var = 0;
+        for (size_t i = 0; i < num_samples; i++) {
+            int32_t dx = fifo_buf[i * 3 + 0] - mx;
+            int32_t dy = fifo_buf[i * 3 + 1] - my;
+            int32_t dz = fifo_buf[i * 3 + 2] - mz;
+            var += (int64_t)(dx * dx) + (int64_t)(dy * dy) + (int64_t)(dz * dz);
+        }
+        var /= num_samples;
+
+        if (var < STILLNESS_THRESHOLD) {
+            is_currently_still = true;
+        } else {
+            is_currently_still = false;
+            last_motion_time = k_uptime_get();
+        }
+
         if (awaiting_stillness) {
-            // calculate per batch variance to check if scale is still
-            int64_t sx = 0, sy = 0, sz = 0;
-            for (size_t i = 0; i < num_samples; i++) {
-                sx += fifo_buf[i * 3 + 0];
-                sy += fifo_buf[i * 3 + 1];
-                sz += fifo_buf[i * 3 + 2];
-            }
-            int32_t mx = (int32_t)(sx / num_samples);
-            int32_t my = (int32_t)(sy / num_samples);
-            int32_t mz = (int32_t)(sz / num_samples);
-
-            int64_t var = 0;
-            for (size_t i = 0; i < num_samples; i++) {
-                int32_t dx = fifo_buf[i * 3 + 0] - mx;
-                int32_t dy = fifo_buf[i * 3 + 1] - my;
-                int32_t dz = fifo_buf[i * 3 + 2] - mz;
-                var += (int64_t)(dx * dx) + (int64_t)(dy * dy) + (int64_t)(dz * dz);
-            }
-            var /= num_samples;
-
             if (var < STILLNESS_THRESHOLD) {
                 still_count++;
                 LOG_INF("Still read %d/%d (var: %lld)", still_count, STILLNESS_REQUIRED_READS, var);
@@ -197,12 +209,13 @@ static void imu_trigger_handler(const struct device *dev, const struct sensor_tr
                     ipc_service_send(&ep, &msg, sizeof(msg));
                 }
             } else {
-                // reset if movement detected again
                 still_count = 0;
             }
         } else {
             // normal shake detection
             if (detect_shake_gesture(fifo_buf, num_samples)) {
+                is_currently_still = false;
+                last_motion_time = k_uptime_get();
                 k_sem_give(&shake_sem);
             }
         }
@@ -213,6 +226,70 @@ static K_SEM_DEFINE(ep_bound, 0, 1);
 
 static void ep_bound_cb(void *priv) {
     k_sem_give(&ep_bound);
+}
+
+static bool check_fifo_stillness_now(void)
+{
+    uint8_t status1, status2;
+    if (i2c_reg_read_byte_dt(&imu_i2c, 0x3A, &status1) != 0 ||
+        i2c_reg_read_byte_dt(&imu_i2c, 0x3B, &status2) != 0) {
+        return false;
+    }
+
+    uint16_t num_words = status1 | ((status2 & 0x07) << 8);
+    size_t num_samples = num_words / 3;
+
+    if (num_samples < 2) {
+        return false;
+    }
+
+    if (num_samples > (FIFO_WATERMARK / 3)) {
+        num_samples = FIFO_WATERMARK / 3;
+    }
+
+    int ret = i2c_burst_read_dt(&imu_i2c, 0x3E, (uint8_t*)fifo_buf, num_samples * 3 * 2);
+    if (ret != 0) {
+        return false;
+    }
+
+    // feed history for shake detection so samples are preserved
+    for (size_t i = 0; i < num_samples; i++) {
+        history[history_idx].x = fifo_buf[i * 3 + 0];
+        history[history_idx].y = fifo_buf[i * 3 + 1];
+        history[history_idx].z = fifo_buf[i * 3 + 2];
+        history_idx = (history_idx + 1) % SHAKE_WINDOW_SAMPLES;
+        if (history_count < SHAKE_WINDOW_SAMPLES) {
+            history_count++;
+        }
+    }
+
+    int64_t sx = 0, sy = 0, sz = 0;
+    for (size_t i = 0; i < num_samples; i++) {
+        sx += fifo_buf[i * 3 + 0];
+        sy += fifo_buf[i * 3 + 1];
+        sz += fifo_buf[i * 3 + 2];
+    }
+    int32_t mx = (int32_t)(sx / num_samples);
+    int32_t my = (int32_t)(sy / num_samples);
+    int32_t mz = (int32_t)(sz / num_samples);
+
+    int64_t var = 0;
+    for (size_t i = 0; i < num_samples; i++) {
+        int32_t dx = fifo_buf[i * 3 + 0] - mx;
+        int32_t dy = fifo_buf[i * 3 + 1] - my;
+        int32_t dz = fifo_buf[i * 3 + 2] - mz;
+        var += (int64_t)(dx * dx) + (int64_t)(dy * dy) + (int64_t)(dz * dz);
+    }
+    var /= num_samples;
+
+    if (var < STILLNESS_THRESHOLD) {
+        is_currently_still = true;
+        return true;
+    }
+
+    is_currently_still = false;
+    last_motion_time = k_uptime_get();
+    return false;
 }
 
 static void ep_recv_cb(const void *data, size_t len, void *priv) {
@@ -226,6 +303,21 @@ static void ep_recv_cb(const void *data, size_t len, void *priv) {
         }
         still_count = 0;
         awaiting_stillness = true;
+    } else if (msg == FAST_STILLNESS_REQUEST) {
+        LOG_INF("Fast stillness check requested by cpuapp");
+        if (is_asleep) {
+            restore_fifo_mode();
+        }
+        if (is_currently_still || check_fifo_stillness_now()) {
+            LOG_INF("Immediate stillness confirmed");
+            awaiting_stillness = false;
+            still_count = 0;
+            uint8_t resp = STILLNESS_CONFIRMED;
+            ipc_service_send(&ep, &resp, sizeof(resp));
+        } else {
+            still_count = 0;
+            awaiting_stillness = true;
+        }
     } else if (msg == WAKE_REQUEST) {
         LOG_INF("Wake requested by cpuapp");
         if (is_asleep) {

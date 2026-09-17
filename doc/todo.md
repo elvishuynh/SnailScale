@@ -29,3 +29,12 @@ Add [[SYSTEM OFF and Wake Up]] by turning off FLPR and keeping IMU powered to fe
 	- Revisit enabling proximity sensing if hover wake or approach detection is needed later
 
 Check internal micro resistors on silicon, might be able to get more power savings by using external resistors instead?
+
+[[IQS231B Touch Sensor Interrupt vs Active Debounce Polling]]
+	- IQS231B open-drain active-low output on D6 (P1.08) has slow rising edge via internal pull-up which can fail to trigger GPIOTE edge interrupt on release
+	- Currently using edge-triggered wake + active 30ms timer debounce polling while touched (with 5s stuck-line recovery guard)
+	- Revisit whether an external hardware pull-up resistor, IQS231B OTP Bank 3 configuration, or Zephyr GPIOTE PORT sense configuration can achieve reliable pure interrupt-driven release without timer polling
+
+[[Scale Tare Averaging Phase Optimization]]
+	- Current tare routine takes 10 samples with 100ms sleep (1000ms total averaging) in scale_logic.c
+	- Revisit tare averaging logic to determine if sample count or interval can be safely reduced while maintaining weight accuracy

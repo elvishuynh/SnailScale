@@ -13,6 +13,7 @@
 #define STILLNESS_CONFIRMED 0x03
 #define SLEEP_REQUEST 0x04
 #define WAKE_REQUEST 0x05
+#define FAST_STILLNESS_REQUEST 0x06
 
 extern int flpr_boot(void);
 
@@ -105,6 +106,21 @@ int motion_ipc_send_stillness_request(void)
     int ret = ipc_service_send(&ep, &msg, sizeof(msg));
     if (ret < 0) {
         LOG_ERR("Failed to send STILLNESS_REQUEST: %d", ret);
+        return ret;
+    }
+    return 0;
+}
+
+// request fast stillness check
+int motion_ipc_send_fast_stillness_request(void)
+{
+    // drain stale signals
+    k_sem_reset(&stillness_sem);
+
+    uint8_t msg = FAST_STILLNESS_REQUEST;
+    int ret = ipc_service_send(&ep, &msg, sizeof(msg));
+    if (ret < 0) {
+        LOG_ERR("Failed to send FAST_STILLNESS_REQUEST: %d", ret);
         return ret;
     }
     return 0;
