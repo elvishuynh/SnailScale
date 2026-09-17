@@ -30,6 +30,7 @@ LOG_MODULE_REGISTER(touch_sensor, CONFIG_LOG_DEFAULT_LEVEL);
 #define IQS231B_REG_PROX_THRESHOLD 0x0B
 #define IQS231B_CMD_STANDALONE 0x01
 #define IQS231B_TOUCH_THRESHOLD_VAL 0x28
+#define IQS231B_PROX_THRESHOLD_VAL 0x08
 
 static const struct gpio_dt_spec touch_pad = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 static const struct gpio_dt_spec touch_sda = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), touchsda_gpios);
@@ -130,8 +131,8 @@ static void iqs_ready_work_handler(struct k_work *work)
 {
 	int ret;
 
-	// float d5 to disable proximity sensing
-	gpio_pin_configure_dt(&touch_pad, GPIO_DISCONNECTED);
+	// pull up d5 for open drain heartbeat
+	gpio_pin_configure_dt(&touch_pad, GPIO_INPUT | GPIO_PULL_UP);
 
 	// configure d6 as active low touch input
 	ret = gpio_pin_configure(touch_sda.port, touch_sda.pin, GPIO_INPUT | GPIO_PULL_UP);
@@ -209,8 +210,8 @@ static void iqs_switch_work_handler(struct k_work *work)
 
 	k_busy_wait(500);
 
-	// set ui to touch with no movement
-	uint8_t bank2_val = (dump[7] & ~0x03) | 0x03;
+	// set ui to touch with no movement and enable quick release
+	uint8_t bank2_val = (dump[7] & ~0x07) | 0x03 | BIT(2);
 	for (int retry = 0; retry < 3; retry++) {
 		bb_start();
 		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
@@ -226,14 +227,14 @@ static void iqs_switch_work_handler(struct k_work *work)
 		k_busy_wait(500);
 	}
 
-	// max out prox threshold to disable internal proximity trigger
+	// set prox threshold within datasheet range
 	for (int retry = 0; retry < 3; retry++) {
 		bb_start();
 		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
 			if (bb_write_byte(IQS231B_REG_PROX_THRESHOLD)) {
-				if (bb_write_byte(0xFF)) {
+				if (bb_write_byte(IQS231B_PROX_THRESHOLD_VAL)) {
 					bb_stop();
-					LOG_INF("IQS231B prox threshold set to max 0xFF");
+					LOG_INF("IQS231B prox threshold set to 0x%02x", IQS231B_PROX_THRESHOLD_VAL);
 					break;
 				}
 			}
