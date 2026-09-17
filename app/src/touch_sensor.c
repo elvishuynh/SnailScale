@@ -42,38 +42,32 @@ void touch_sensor_lockout(uint32_t duration_ms)
 	lockout_until = k_uptime_get() + duration_ms;
 }
 
-// bit bang i2c primitives
+// bit bang i2c open drain primitives
 static void bb_scl_set(int high)
 {
 	if (high) {
-		gpio_pin_configure(touch_pad.port, touch_pad.pin, GPIO_INPUT | GPIO_PULL_UP);
-		// wait for slave to release clock
-		int timeout_us = 2000;
-		while (gpio_pin_get(touch_pad.port, touch_pad.pin) == 0 && timeout_us > 0) {
+		gpio_pin_set_raw(touch_pad.port, touch_pad.pin, 1);
+		// wait for clock stretch
+		int timeout_us = 10000;
+		while (gpio_pin_get_raw(touch_pad.port, touch_pad.pin) == 0 && timeout_us > 0) {
 			k_busy_wait(10);
 			timeout_us -= 10;
 		}
 	} else {
-		gpio_pin_configure(touch_pad.port, touch_pad.pin, GPIO_OUTPUT_LOW);
-		gpio_pin_set(touch_pad.port, touch_pad.pin, 0);
+		gpio_pin_set_raw(touch_pad.port, touch_pad.pin, 0);
 	}
-	k_busy_wait(20);
+	k_busy_wait(10);
 }
 
 static void bb_sda_set(int high)
 {
-	if (high) {
-		gpio_pin_configure(touch_sda.port, touch_sda.pin, GPIO_INPUT | GPIO_PULL_UP);
-	} else {
-		gpio_pin_configure(touch_sda.port, touch_sda.pin, GPIO_OUTPUT_LOW);
-		gpio_pin_set(touch_sda.port, touch_sda.pin, 0);
-	}
-	k_busy_wait(20);
+	gpio_pin_set_raw(touch_sda.port, touch_sda.pin, high ? 1 : 0);
+	k_busy_wait(10);
 }
 
 static int bb_sda_get(void)
 {
-	return gpio_pin_get(touch_sda.port, touch_sda.pin);
+	return gpio_pin_get_raw(touch_sda.port, touch_sda.pin);
 }
 
 static void bb_start(void)
@@ -89,6 +83,7 @@ static void bb_stop(void)
 	bb_sda_set(0);
 	bb_scl_set(1);
 	bb_sda_set(1);
+	k_busy_wait(20);
 }
 
 static bool bb_write_byte(uint8_t byte)
@@ -105,53 +100,97 @@ static bool bb_write_byte(uint8_t byte)
 	return ack;
 }
 
+static uint8_t bb_read_byte(bool ack)
+{
+	uint8_t byte = 0;
+	bb_sda_set(1);
+	for (int i = 7; i >= 0; i--) {
+		bb_scl_set(1);
+		if (bb_sda_get() > 0) {
+			byte |= (1 << i);
+		}
+		bb_scl_set(0);
+	}
+	bb_sda_set(ack ? 0 : 1);
+	bb_scl_set(1);
+	bb_scl_set(0);
+	bb_sda_set(1);
+	return byte;
+}
+
 static void iqs231b_configure_standalone(void)
 {
-	// check initial bus line levels
-	gpio_pin_configure(touch_pad.port, touch_pad.pin, GPIO_INPUT | GPIO_PULL_UP);
-	gpio_pin_configure(touch_sda.port, touch_sda.pin, GPIO_INPUT | GPIO_PULL_UP);
-	k_busy_wait(200);
-	int scl_raw = gpio_pin_get(touch_pad.port, touch_pad.pin);
-	int sda_raw = gpio_pin_get(touch_sda.port, touch_sda.pin);
+	// wait for test mode window of 340ms to finish
+	int64_t uptime = k_uptime_get();
+	if (uptime < 450) {
+		k_msleep(450 - uptime);
+	}
+
+	// configure pins as open drain with pull up
+	gpio_pin_configure(touch_pad.port, touch_pad.pin,
+			   GPIO_OUTPUT_HIGH | GPIO_OPEN_DRAIN | GPIO_PULL_UP | GPIO_INPUT);
+	gpio_pin_configure(touch_sda.port, touch_sda.pin,
+			   GPIO_OUTPUT_HIGH | GPIO_OPEN_DRAIN | GPIO_PULL_UP | GPIO_INPUT);
+	k_busy_wait(100);
+
+	int scl_raw = gpio_pin_get_raw(touch_pad.port, touch_pad.pin);
+	int sda_raw = gpio_pin_get_raw(touch_sda.port, touch_sda.pin);
 	LOG_INF("IQS231B lines before start SCL %d SDA %d", scl_raw, sda_raw);
 
-	// send standalone command directly to register 0x04
-	// retry address byte across sensing cycles if sleeping
-	bool addr_ack = false;
-	for (int attempt = 0; attempt < 10; attempt++) {
+	// probe device and read registers if responding
+	bool dev_found = false;
+	uint8_t events = 0;
+	uint8_t prod_id = 0;
+	uint8_t sw_ver = 0;
+
+	for (int attempt = 0; attempt < 5; attempt++) {
 		bb_start();
-		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
-			addr_ack = true;
+		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 1)) {
+			events = bb_read_byte(true);
+			prod_id = bb_read_byte(true);
+			sw_ver = bb_read_byte(false);
+			bb_stop();
+			dev_found = true;
+			LOG_INF("IQS231B detected prod 0x%02x ver 0x%02x events 0x%02x",
+				prod_id, sw_ver, events);
 			break;
 		}
 		bb_stop();
-		k_msleep(5);
+		k_msleep(10);
 	}
 
-	if (!addr_ack) {
-		LOG_INF("IQS231B address 0x44 not responding maybe already in standalone");
+	if (!dev_found) {
+		LOG_INF("IQS231B address 0x44 not responding assuming already standalone");
 		return;
 	}
 
-	// write commands register 0x04
-	if (!bb_write_byte(IQS231B_REG_COMMANDS)) {
-		LOG_WRN("IQS231B commands register write NACK");
+	k_msleep(5);
+
+	// write commands register 4 with standalone command 1
+	bool cmd_ok = false;
+	for (int retry = 0; retry < 3; retry++) {
+		bb_start();
+		if (bb_write_byte((IQS231B_I2C_ADDR << 1) | 0)) {
+			if (bb_write_byte(IQS231B_REG_COMMANDS)) {
+				if (bb_write_byte(IQS231B_CMD_STANDALONE)) {
+					cmd_ok = true;
+					bb_stop();
+					break;
+				}
+			}
+		}
 		bb_stop();
-		return;
+		k_msleep(10);
 	}
 
-	// write standalone mode command 0x01
-	if (!bb_write_byte(IQS231B_CMD_STANDALONE)) {
-		LOG_WRN("IQS231B standalone command data NACK");
-		bb_stop();
-		return;
+	if (cmd_ok) {
+		LOG_INF("IQS231B standalone mode command successful");
+	} else {
+		LOG_WRN("IQS231B standalone command failed");
 	}
-
-	bb_stop();
-	LOG_INF("IQS231B standalone mode command successful");
 
 	// settle time for standalone transition and ati
-	k_msleep(50);
+	k_msleep(150);
 }
 
 static void long_press_work_handler(struct k_work *work)

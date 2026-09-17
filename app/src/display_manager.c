@@ -10,6 +10,10 @@ LOG_MODULE_REGISTER(display_manager, CONFIG_LOG_DEFAULT_LEVEL);
 static struct k_work_delayable inactivity_work;
 K_MSGQ_DEFINE(display_msgq, sizeof(struct display_msg), 16, 4);
 
+static struct display_msg cached_msg;
+static bool has_cached_msg;
+static uint8_t cached_brightness = 2;
+
 static void inactivity_work_handler(struct k_work *work)
 {
 	display_manager_set_brightness(1);
@@ -66,6 +70,11 @@ void display_manager_power_on(void)
 	k_msgq_put(&display_msgq, &msg, K_NO_WAIT);
 }
 
+void display_manager_refresh(void)
+{
+	display_manager_power_on();
+}
+
 void display_manager_register_activity(void)
 {
 	display_manager_set_brightness(2);
@@ -80,15 +89,21 @@ static void display_thread(void)
 		if (k_msgq_get(&display_msgq, &msg, K_FOREVER) == 0) {
 			switch (msg.type) {
 				case MSG_DISPLAY_CLEAR:
+					has_cached_msg = false;
 					pt18_matrix_clear();
 					break;
 				case MSG_DISPLAY_PRINT:
+					cached_msg = msg;
+					has_cached_msg = true;
 					pt18_matrix_print(msg.data.print.str, msg.data.print.align);
 					break;
 				case MSG_DISPLAY_WRITE:
+					cached_msg = msg;
+					has_cached_msg = true;
 					pt18_matrix_write(msg.data.write.buf, msg.data.write.len);
 					break;
 				case MSG_DISPLAY_SET_BRIGHTNESS:
+					cached_brightness = msg.data.brightness.level;
 					pt18_matrix_set_brightness(msg.data.brightness.level);
 					break;
 				case MSG_DISPLAY_POWER_OFF:
@@ -96,6 +111,18 @@ static void display_thread(void)
 					break;
 				case MSG_DISPLAY_POWER_ON:
 					pt18_matrix_power_on();
+					pt18_matrix_set_brightness(cached_brightness);
+					if (has_cached_msg) {
+						if (cached_msg.type == MSG_DISPLAY_PRINT) {
+							pt18_matrix_print(cached_msg.data.print.str,
+									  cached_msg.data.print.align);
+						} else if (cached_msg.type == MSG_DISPLAY_WRITE) {
+							pt18_matrix_write(cached_msg.data.write.buf,
+									  cached_msg.data.write.len);
+						}
+					} else {
+						pt18_matrix_clear();
+					}
 					break;
 				default:
 					LOG_WRN("Unknown display message type: %d", msg.type);

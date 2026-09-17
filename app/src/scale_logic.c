@@ -529,14 +529,15 @@ ZBUS_CHAN_DEFINE(calibrate_request_chan,
 
 static void scale_wake(void)
 {
+	display_manager_register_activity();
+	scale_logic_register_activity();
+
 	if (!is_sleeping) {
 		return;
 	}
 	LOG_INF("Waking scale peripherals");
 	periph_3v3_on();
 	display_manager_power_on();
-	display_manager_register_activity();
-	scale_logic_register_activity();
 #ifdef CONFIG_PM_DEVICE
 	if (nau_dev_ptr != NULL && device_is_ready(nau_dev_ptr)) {
 		pm_device_action_run(nau_dev_ptr, PM_DEVICE_ACTION_RESUME);
@@ -556,6 +557,9 @@ static void scale_tare_thread(void)
 		if (chan == &tare_request_chan) {
 			LOG_INF("Tare requested via zbus");
 
+			display_manager_register_activity();
+			scale_logic_register_activity();
+
 			if (is_sleeping) {
 				scale_wake();
 			}
@@ -573,6 +577,9 @@ static void scale_tare_thread(void)
 			scale_wake();
 		} else if (chan == &calibrate_request_chan) {
 			LOG_INF("Calibration requested via zbus");
+
+			display_manager_register_activity();
+			scale_logic_register_activity();
 
 			if (is_sleeping) {
 				scale_wake();

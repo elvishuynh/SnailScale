@@ -21,7 +21,7 @@ struct display_msg {
 			int align;
 		} print;
 		struct {
-			uint8_t buf[16];
+			uint8_t buf[17];
 			size_t len;
 		} write;
 		struct {
@@ -37,6 +37,7 @@ void display_manager_write(const uint8_t *buf, size_t len);
 void display_manager_set_brightness(uint8_t level);
 void display_manager_power_off(void);
 void display_manager_power_on(void);
+void display_manager_refresh(void);
 void display_manager_register_activity(void);
 
 #endif /* DISPLAY_MANAGER_H */
