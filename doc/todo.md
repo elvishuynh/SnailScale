@@ -24,4 +24,8 @@
 
 Add [[SYSTEM OFF and Wake Up]] by turning off FLPR and keeping IMU powered to feed GPIO interrupt based on picking up the scale
 
+[[Revisit IQS231B Proximity Sensing]]
+	- Proximity sensing on IO1 (D5) is currently disabled to eliminate false triggers from ambient noise and thermal drift
+	- Revisit enabling proximity sensing if hover wake or approach detection is needed later
+
 Check internal micro resistors on silicon, might be able to get more power savings by using external resistors instead?
