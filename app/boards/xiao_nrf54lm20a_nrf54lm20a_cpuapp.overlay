@@ -117,6 +117,15 @@ dmic_dev: &pdm20 {
                 conversions-per-second = <20>;
                 gain = <128>;
         };
+
+        drv2605: drv2605@5a {
+                compatible = "ti,drv2605";
+                reg = <0x5a>;
+                status = "okay";
+                actuator-mode = "LRA";
+                vib-rated-mv = <1800>;
+                vib-overdrive-mv = <2000>;
+        };
 };
 
 / {

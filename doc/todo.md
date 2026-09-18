@@ -20,7 +20,10 @@
 	- Revisit disabling via OTP Bank 2 (register 0x06) if permanent OTP burn is desired in the future
 
 [[Adafruit DRV2605L + VL120628H LRA Haptics]]
-	- Implement haptic feedback driver on shared i2c22 bus (powered via TPS22917 VOUT)
+	~~- Implement haptic feedback driver on shared i2c22 bus (powered via TPS22917 VOUT)~~
+	- Revisit haptic waveform selection across gestures
+	- Implement a depress and release feeling for touch interactions (distinct tactile feedback on initial press-down as well as release)
+	- Figure out how to mitigate or optimize the large amount of power drawn by the vibration motor (peak current and battery consumption)
 
 Add [[SYSTEM OFF and Wake Up]] by turning off FLPR and keeping IMU powered to feed GPIO interrupt based on picking up the scale
 

@@ -21,6 +21,7 @@
 #include "symbols.h"
 #include "touch_sensor.h"
 #include "periph_power.h"
+#include "haptic_manager.h"
 
 #define SCALE_FILTER_SETTING 2
 
@@ -545,6 +546,9 @@ static void scale_wake(void)
 	// wake flpr coprocessor
 	motion_ipc_send_wake_request();
 	periph_3v3_on();
+	// reinit haptic registers and give subtle click
+	haptic_manager_reinit();
+	haptic_play_subtle_click();
 	display_manager_power_on();
 #ifdef CONFIG_PM_DEVICE
 	if (nau_dev_ptr != NULL && device_is_ready(nau_dev_ptr)) {

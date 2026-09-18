@@ -12,6 +12,7 @@
 #include "motion_ipc.h"
 #include "fault_handler.h"
 #include "display_manager.h"
+#include "haptic_manager.h"
 
 #include <zephyr/dfu/mcuboot.h>
 #include <app_version.h>
@@ -28,6 +29,9 @@ int main(void)
 	if (display_manager_init() != 0) {
 		system_fault_handler("Display manager init failed");
 	}
+
+	// init haptics
+	haptic_manager_init();
 
 
 	if (bluetooth_init()) {

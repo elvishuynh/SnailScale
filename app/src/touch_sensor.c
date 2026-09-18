@@ -7,6 +7,7 @@ LOG_MODULE_REGISTER(touch_sensor, CONFIG_LOG_DEFAULT_LEVEL);
 
 #include "events.h"
 #include "display_manager.h"
+#include "haptic_manager.h"
 
 // debounce window
 #define DEBOUNCE_DELAY_MS 30
@@ -424,6 +425,8 @@ static void debounce_work_handler(struct k_work *work)
 			cal_armed = true;
 			k_work_reschedule(&cal_timeout_work, K_MSEC(CAL_ARM_WINDOW_MS));
 			display_manager_register_activity();
+			// play arm cal feedback
+			haptic_play_arm_cal();
 			LOG_INF("Hold >= 1000ms detected CAL mode armed tap once to confirm");
 		} else if (press_duration >= MIN_TAP_DURATION_MS) {
 			if (cal_armed) {
@@ -432,12 +435,16 @@ static void debounce_work_handler(struct k_work *work)
 				k_work_cancel_delayable(&cal_timeout_work);
 				display_manager_register_activity();
 				LOG_INF("CAL confirmation tap detected. Firing calibrate event.");
+				// play cal confirm feedback
+				haptic_play_cal_confirm();
 				struct calibrate_request_msg msg;
 				zbus_chan_pub(&calibrate_request_chan, &msg, K_NO_WAIT);
 			} else {
 				// zero delay instant tare on tap release
 				display_manager_register_activity();
 				LOG_INF("Tap detected. Firing tare event.");
+				// play tap click feedback
+				haptic_play_click();
 				struct tare_request_msg msg;
 				zbus_chan_pub(&tare_request_chan, &msg, K_NO_WAIT);
 			}

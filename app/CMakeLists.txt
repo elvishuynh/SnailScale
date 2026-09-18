@@ -30,6 +30,7 @@ target_sources(app PRIVATE
     src/fault_handler.c
     src/display_manager.c
     src/periph_power.c
+    src/haptic_manager.c
 )
 
 target_include_directories(app PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include")
